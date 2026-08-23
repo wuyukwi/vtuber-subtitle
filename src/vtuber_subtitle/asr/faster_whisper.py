@@ -27,7 +27,7 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
 
 def _cuda_available() -> bool:
     try:
-        import torch
-        return bool(torch.cuda.is_available())
+        import ctranslate2
+        return ctranslate2.get_cuda_device_count() > 0
     except Exception:
         return False
