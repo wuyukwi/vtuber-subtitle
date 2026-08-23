@@ -164,7 +164,7 @@ vtuber-subtitle test.mp4 -o test.ass --provider opencode-go --model gpt-5.6-luna
 ぺこら: 佩克拉
 先輩: 前辈
 星街すいせい: 星街彗星
-鹿乃まほろ: 鹿乃玛荷洛
+鹿乃まほろ: 鹿乃まほろ
 ```
 
 运行时传入：
