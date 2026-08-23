@@ -17,9 +17,13 @@ dev = ["pytest>=8.0"]
 
 [project.scripts]
 vtuber-subtitle = "vtuber_subtitle.cli:main"
+vtuber-subtitle-web = "vtuber_subtitle.web:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+vtuber_subtitle = ["index.html"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

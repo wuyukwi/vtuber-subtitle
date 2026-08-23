@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VTuber Subtitle 字幕生成</title>
+<style>
+  :root { --bg:#17171c; --panel:#22222a; --panel2:#2a2a33; --text:#e8e8ee; --muted:#9a9aa8; --accent:#6ea8ff; --ok:#4cd97b; --err:#ff6b6b; --border:#3a3a46; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Microsoft YaHei", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 28px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:14px; }
+  header h1 { font-size:18px; margin:0; }
+  header .badge { font-size:12px; color:var(--muted); }
+  main { display:grid; grid-template-columns: 420px 1fr; gap:18px; padding:18px 28px; max-width:1400px; margin:0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .panel h2 { margin:0 0 14px; font-size:14px; color:var(--muted); font-weight:600; }
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+  .field input[type=text], .field select { width:100%; padding:8px 10px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; }
+  .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; }
+  .row .field { flex:1; }
+  .check { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .actions { margin-top:16px; display:flex; gap:10px; }
+  button { padding:10px 18px; border:none; border-radius:6px; font-size:14px; cursor:pointer; }
+  #startBtn { background:var(--accent); color:#fff; flex:1; }
+  #startBtn:disabled { opacity:.5; cursor:not-allowed; }
+  #downloadBtn { background:var(--ok); color:#fff; display:none; }
+  .status { margin-top:14px; font-size:13px; min-height:22px; }
+  .status .state { color:var(--muted); }
+  .status .state.running { color:var(--accent); }
+  .status .state.ok { color:var(--ok); }
+  .status .state.err { color:var(--err); }
+  #log { margin:0; height:520px; overflow:auto; background:#101014; border:1px solid var(--border); border-radius:8px; padding:12px; font:12px/1.6 Consolas, monospace; white-space:pre-wrap; word-break:break-all; }
+  #log .err { color:var(--err); }
+  #log .ok { color:var(--ok); }
+  .hint { font-size:12px; color:var(--muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VTuber Subtitle</h1>
+  <span class="badge">本地 Web 界面 · 视频 → 日语识别 → LLM 翻译 → 双语 ASS</span>
+</header>
+
+<main>
+  <div class="panel">
+    <h2>任务设置</h2>
+
+    <div class="field">
+      <label>视频 / 音频文件路径</label>
+      <input type="text" id="video" placeholder="例如 D:\迅雷下载\xxx.mp4" oninput="autoOutput()">
+      <div class="hint">完整路径，含盘符。</div>
+    </div>
+
+    <div class="field">
+      <label>输出 ASS 路径</label>
+      <input type="text" id="output" placeholder="留空则与视频同名 .ass">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>起始时间（可选）</label>
+        <input type="text" id="startTime" placeholder="00:20:00">
+      </div>
+      <div class="field">
+        <label>结束时间（可选）</label>
+        <input type="text" id="endTime" placeholder="00:30:00">
+      </div>
+    </div>
+
+    <div class="field">
+      <label>字幕模式</label>
+      <select id="subtitleMode">
+        <option value="bilingual">双语（日文 + 中文）</option>
+        <option value="japanese">仅日文</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>翻译服务（Provider）</label>
+      <select id="provider" onchange="providerChanged()">
+        <option value="deepseek">DeepSeek（LLM_API_KEY / DEEPSEEK_API_KEY）</option>
+        <option value="opencode-go">OpenCode Go（OPENCODE_API_KEY）</option>
+        <option value="openai">OpenAI（LLM_API_KEY）</option>
+        <option value="gemini">Gemini（GEMINI_API_KEY）</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>翻译模型</label>
+      <input type="text" id="model" placeholder="deepseek-v4-flash / gpt-5.6-luna / deepseek-chat">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>语音识别模型</label>
+        <select id="asrModel">
+          <option value="large-v3" selected>large-v3（最准，推荐）</option>
+          <option value="medium">medium</option>
+          <option value="small">small（最快）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>设备</label>
+        <select id="device">
+          <option value="auto" selected>auto</option>
+          <option value="cuda">cuda (GPU)</option>
+          <option value="cpu">cpu</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>计算类型</label>
+        <select id="computeType">
+          <option value="auto" selected>auto</option>
+          <option value="float16">float16</option>
+          <option value="int8">int8</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>术语表 Glossary（可选）</label>
+      <input type="text" id="glossary" placeholder="glossary.yaml">
+    </div>
+
+    <details style="margin-top:4px;">
+      <summary class="hint">样式模板（可选，高级）</summary>
+      <div style="margin-top:8px;">
+        <div class="field"><label>人工 ASS 模板路径</label><input type="text" id="template" placeholder="D:\...\人工轴.ass"></div>
+        <div class="row">
+          <div class="field"><label>日文 Style 名</label><input type="text" id="jpStyle" value="Japanese"></div>
+          <div class="field"><label>中文 Style 名</label><input type="text" id="cnStyle" value="Chinese"></div>
+        </div>
+      </div>
+    </details>
+
+    <div class="check" style="margin-top:10px;">
+      <input type="checkbox" id="vad" checked>
+      <label for="vad">启用 VAD 静音过滤（防止尾部重复幻觉，默认开）</label>
+    </div>
+
+    <div class="actions">
+      <button id="startBtn" onclick="startJob()">开始生成字幕</button>
+      <button id="downloadBtn" onclick="downloadFile()">下载 ASS</button>
+    </div>
+
+    <div class="status">
+      <span class="state" id="stateText">就绪</span>
+      <span id="errText" style="color:var(--err);"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>运行日志</h2>
+    <pre id="log"></pre>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let pollTimer = null;
+let lastOutput = null;
+
+function autoOutput() {
+  const v = $("video").value.trim();
+  if (v && !$("output").value.trim()) {
+    $("output").value = v.replace(/\.[^.]+$/, "") + ".ass";
+  }
+}
+
+function providerChanged() {
+  const p = $("provider").value;
+  const m = { "deepseek": "deepseek-v4-flash", "opencode-go": "gpt-5.6-luna", "openai": "gpt-4o-mini", "gemini": "gemini-2.0-flash" }[p];
+  if (!$("model").value.trim()) $("model").value = m;
+}
+
+function appendLog(line, cls) {
+  const el = document.createElement("div");
+  if (cls) el.className = cls;
+  el.textContent = line;
+  $("log").appendChild(el);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+function setState(text, cls) {
+  const el = $("stateText");
+  el.textContent = text;
+  el.className = "state " + (cls || "");
+}
+
+async function startJob() {
+  const config = {
+    video: $("video").value.trim(),
+    output: $("output").value.trim(),
+    start_time: $("startTime").value.trim() || null,
+    end_time: $("endTime").value.trim() || null,
+    subtitle_mode: $("subtitleMode").value,
+    provider: $("provider").value,
+    model: $("model").value.trim() || null,
+    asr_model: $("asrModel").value,
+    device: $("device").value,
+    compute_type: $("computeType").value,
+    glossary: $("glossary").value.trim() || null,
+    template: $("template").value.trim() || null,
+    japanese_style: $("jpStyle").value.trim() || "Japanese",
+    chinese_style: $("cnStyle").value.trim() || "Chinese",
+    vad_filter: $("vad").checked,
+  };
+  if (!config.video) { alert("请填写视频文件路径"); return; }
+  if (!config.output) config.output = config.video.replace(/\.[^.]+$/, "") + ".ass";
+
+  $("log").innerHTML = "";
+  $("errText").textContent = "";
+  $("downloadBtn").style.display = "none";
+  $("startBtn").disabled = true;
+  lastOutput = null;
+  setState("任务运行中…", "running");
+
+  const res = await fetch("/api/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    setState("启动失败", "err");
+    $("errText").textContent = text;
+    $("startBtn").disabled = false;
+    return;
+  }
+  pollTimer = setInterval(pollStatus, 1000);
+  pollStatus();
+}
+
+async function pollStatus() {
+  try {
+    const res = await fetch("/api/status");
+    const data = await res.json();
+    $("log").innerHTML = "";
+    data.logs.forEach(line => {
+      const cls = line.startsWith("错误") ? "err" : (line.startsWith("完成") ? "ok" : "");
+      appendLog(line, cls);
+    });
+    lastOutput = data.output || lastOutput;
+    if (data.done) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      $("startBtn").disabled = false;
+      if (data.ok) {
+        setState("完成", "ok");
+        $("downloadBtn").style.display = "block";
+      } else {
+        setState("失败", "err");
+        $("errText").textContent = data.error;
+      }
+    } else {
+      setState("任务运行中…", "running");
+    }
+  } catch (e) {
+    // transient
+  }
+}
+
+function downloadFile() {
+  if (!lastOutput) return;
+  window.location = "/api/download?path=" + encodeURIComponent(lastOutput);
+}
+
+providerChanged();
+</script>
+</body>
+</html>

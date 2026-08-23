@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Callable
 from .audio import extract_audio
 from .asr.faster_whisper import transcribe
 from .ass import write_ass
@@ -39,7 +40,7 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
         chinese_style: str = "Chinese", max_segment_seconds: float = 15.0,
-        pause_threshold: float = 0.8) -> Path:
+        pause_threshold: float = 0.8, log: Callable[[str], None] = print) -> Path:
     video_path = Path(video).resolve()
     if not video_path.is_file():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -54,14 +55,14 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
     translated_json = work / "translated_v17.json"
     if asr_json.exists():
         segments = _read_segments(asr_json)
-        print(f"Using cached transcription: {asr_json}")
+        log(f"Using cached transcription: {asr_json}")
     else:
         if audio.exists():
-            print(f"Using cached audio: {audio}")
+            log(f"Using cached audio: {audio}")
         else:
-            print("Extracting audio...")
+            log("Extracting audio...")
             extract_audio(video_path, audio, start if start else None, end)
-        print(f"Transcribing with faster-whisper ({asr_model})...")
+        log(f"Transcribing with faster-whisper ({asr_model})...")
         segments = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter,
                               max_segment_seconds=max_segment_seconds,
                               pause_threshold=pause_threshold)
@@ -75,17 +76,17 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         translated = segments
     elif translated_json.exists():
         translated = _read_segments(translated_json)
-        print(f"Using cached translation: {translated_json}")
+        log(f"Using cached translation: {translated_json}")
     else:
         entries = load_glossary(glossary)
         client = TranslationClient(provider, model, base_url, temperature=temperature)
         translated = []
         for start in range(0, len(segments), batch_size):
             batch = segments[start:start + batch_size]
-            print(f"Translating {start + 1}-{start + len(batch)} / {len(segments)}...")
+            log(f"Translating {start + 1}-{start + len(batch)} / {len(segments)}...")
             translated.extend(client.translate(batch, entries))
         _write_segments(translated_json, translated)
     result = write_ass(translated, output, template=template,
                        japanese_style=japanese_style, chinese_style=chinese_style)
-    print(f"Wrote: {result}")
+    log(f"Wrote: {result}")
     return result

@@ -130,6 +130,43 @@ vtuber-subtitle input.mp4 `
 .venv\Scripts\python.exe -m vtuber_subtitle.cli input.mp4 -o output.ass --provider opencode-go --model gpt-5.6-luna
 ```
 
+### Web 图形界面
+
+不想记命令行参数的话，可以启动本地 Web 界面，用表单配置并一键生成：
+
+```powershell
+.venv\Scripts\Activate.ps1
+vtuber-subtitle-web
+```
+
+或：
+
+```powershell
+.venv\Scripts\python.exe -m vtuber_subtitle.web
+```
+
+然后在浏览器打开：
+
+```text
+http://127.0.0.1:8000
+```
+
+界面支持：
+
+- 视频路径、输出路径
+- 起始 / 结束时间（按原视频时间）
+- 双语 / 仅日文字幕
+- 翻译服务（DeepSeek / OpenCode Go / OpenAI / Gemini）与模型
+- ASR 模型、设备、计算类型
+- 术语表、人工 ASS 样式模板
+- 实时运行日志、完成后一键下载 ASS
+
+默认只监听本机 `127.0.0.1`。需要换端口：
+
+```powershell
+vtuber-subtitle-web --port 9000
+```
+
 默认 `--subtitle-mode` 是 `bilingual`，会为每个时间片生成日文和中文两条 ASS 对话。
 
 ### 只生成日文字幕
