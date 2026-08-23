@@ -25,8 +25,8 @@ def main() -> None:
                         help="Enable VAD (default; tuned to preserve short speech)")
     parser.add_argument("--no-vad", action="store_false", dest="enable_vad",
                         help="Disable VAD; may cause repeated hallucinated subtitles during silence")
-    parser.add_argument("--max-segment-seconds", type=float, default=5.0,
-                        help="Maximum subtitle duration before splitting (default: 5)")
+    parser.add_argument("--max-segment-seconds", type=float, default=15.0,
+                        help="Maximum subtitle duration before splitting (default: 15)")
     parser.add_argument("--pause-threshold", type=float, default=0.8,
                         help="Split when the word-level pause reaches this many seconds")
     parser.add_argument("--start-time", help="Only process from this source-video time, e.g. 00:20:00")

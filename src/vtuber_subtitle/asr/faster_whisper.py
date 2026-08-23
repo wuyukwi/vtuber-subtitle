@@ -5,7 +5,7 @@ from ..models import Segment
 
 def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "auto",
                compute_type: str = "auto", beam_size: int = 5, vad_filter: bool = True,
-               max_segment_seconds: float = 5.0, pause_threshold: float = 0.8) -> list[Segment]:
+               max_segment_seconds: float = 15.0, pause_threshold: float = 0.8) -> list[Segment]:
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
@@ -26,6 +26,7 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
         condition_on_previous_text=False, word_timestamps=True)
     raw = _split_by_words(list(chunks), max_segment_seconds, pause_threshold)
     raw = _merge_short_fragments(raw)
+    raw = _build_sentences(raw)
     return _remove_repeated_hallucinations(raw)
 
 
@@ -194,6 +195,80 @@ def _remove_repeated_hallucinations(segments: list[Segment]) -> list[Segment]:
             continue
         cleaned.append(Segment(len(cleaned), segment.start, segment.end, segment.japanese, segment.chinese))
     return cleaned
+
+
+_SENTENCE_ENDERS = (
+    "でした", "ましたね", "ですね", "ですか", "ましょう", "ません", "ました",
+    "です", "ます", "ですよ", "ですよね", "ますか", "んです", "んだ",
+    "だよ", "だね", "だな", "だぞ", "だわ", "かな", "かしら", "よね",
+    "。", "！", "？", ".", "?", "!", "～", "〜",
+    "よ", "ね", "ぞ", "わ", "なぁ",
+)
+_LONG_PAUSE_SECONDS = 2.5
+_POLITE_PAUSE_SECONDS = 0.35
+_CLAUSE_PAUSE_SECONDS = 0.6
+_RESPONSE_WORDS = {"はい", "ええ", "うん", "あの", "えっと", "そう", "じゃ", "じゃあ"}
+_CLAUSE_ENDERS = ("かっていう", "っていう", "という", "けど", "から", "ので", "んで")
+
+
+def _is_sentence_final(text: str) -> bool:
+    text = text.rstrip()
+    for ender in _SENTENCE_ENDERS:
+        if text.endswith(ender):
+            return True
+    return False
+
+
+def _build_sentences(segments: list[Segment], max_duration: float = 12.0) -> list[Segment]:
+    """Group consecutive fragments into complete sentences, splitting only at
+    strong punctuation, a long pause, a polite/clause ending with a pause, so
+    subtitles are not cut mid-sentence and stay within a readable length."""
+    sentences: list[Segment] = []
+    buffer_start: float | None = None
+    buffer_end: float | None = None
+    buffer_text: list[str] = []
+
+    def flush() -> None:
+        nonlocal buffer_start, buffer_end, buffer_text
+        if buffer_text and buffer_start is not None and buffer_end is not None:
+            sentences.append(Segment(len(sentences), buffer_start, buffer_end,
+                                     "".join(buffer_text)))
+        buffer_start = None
+        buffer_end = None
+        buffer_text = []
+
+    for segment in segments:
+        text = segment.japanese.strip()
+        if not text:
+            continue
+        if not buffer_text and text in _RESPONSE_WORDS:
+            sentences.append(Segment(len(sentences), segment.start, segment.end, text))
+            continue
+        if buffer_text:
+            gap = segment.start - buffer_end
+            joined = "".join(buffer_text)
+            strong_end = joined.endswith(("。", "！", "？", ".", "?", "!"))
+            polite_end = _is_sentence_final(joined)
+            clause_end = joined.endswith(_CLAUSE_ENDERS)
+            if text in _RESPONSE_WORDS:
+                flush()
+            elif gap >= _LONG_PAUSE_SECONDS or strong_end:
+                flush()
+            elif polite_end and gap >= _POLITE_PAUSE_SECONDS:
+                flush()
+            elif clause_end and gap >= _CLAUSE_PAUSE_SECONDS:
+                flush()
+            elif segment.end - buffer_start >= max_duration and gap >= _POLITE_PAUSE_SECONDS:
+                flush()
+        if not buffer_text and text in _RESPONSE_WORDS:
+            sentences.append(Segment(len(sentences), segment.start, segment.end, text))
+            continue
+        if buffer_start is None:
+            buffer_start = segment.start
+        buffer_text.append(text)
+        buffer_end = segment.end
+    flush()
+    return sentences
 
 
 def _cuda_available() -> bool:

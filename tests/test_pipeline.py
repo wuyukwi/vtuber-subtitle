@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from vtuber_subtitle.asr.faster_whisper import (
     _split_by_words, _split_clause_text, _split_short_response, _merge_short_fragments,
+    _build_sentences, _is_sentence_final,
 )
 from vtuber_subtitle.models import Segment
 from vtuber_subtitle.pipeline import parse_time
@@ -89,3 +90,39 @@ def test_do_not_merge_negative_complete_ending():
         _seg(1, 2.0, 4.0, "ないんですけど"),
     ])
     assert [item.japanese for item in merged] == ["ーとはまた違うかもしれない", "ないんですけど"]
+
+
+def test_is_sentence_final():
+    assert _is_sentence_final("クリスマスイブです")
+    assert _is_sentence_final("好きですよね")
+    assert not _is_sentence_final("一緒にされましたかっていう質問は")
+    assert not _is_sentence_final("クリスマスプレゼントとお誕生日プレゼントは")
+    assert not _is_sentence_final("ちょっと今を満喫しようと思って")
+
+
+def test_build_sentences_groups_fragments():
+    merged = _build_sentences([
+        _seg(0, 0.0, 1.0, "はい"),
+        _seg(1, 1.0, 2.0, "で誕生日は12月24日です"),
+        _seg(2, 2.1, 3.0, "クリスマスイブです"),
+        _seg(3, 5.5, 6.5, "次の質問に移ります"),
+    ])
+    assert [item.japanese for item in merged] == [
+        "はい", "で誕生日は12月24日ですクリスマスイブです", "次の質問に移ります"
+    ]
+
+
+def test_build_sentences_splits_at_sentence_end():
+    merged = _build_sentences([
+        _seg(0, 0.0, 1.0, "今日は楽しいです"),
+        _seg(1, 2.5, 3.5, "明日も楽しみです"),
+    ])
+    assert [item.japanese for item in merged] == ["今日は楽しいです", "明日も楽しみです"]
+
+
+def test_build_sentences_splits_at_strong_punctuation():
+    merged = _build_sentences([
+        _seg(0, 0.0, 1.0, "ちょっと待って。"),
+        _seg(1, 1.1, 2.0, "次いこう"),
+    ])
+    assert [item.japanese for item in merged] == ["ちょっと待って。", "次いこう"]
