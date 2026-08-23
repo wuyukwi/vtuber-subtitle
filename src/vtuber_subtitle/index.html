@@ -23,6 +23,22 @@
   .input-row input { flex:1; }
   .browse { flex:0 0 auto; padding:8px 14px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer; }
   .browse:hover { border-color:var(--accent); color:var(--accent); }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.show { display:flex; }
+  .modal { width:680px; max-width:92vw; max-height:80vh; background:var(--panel); border:1px solid var(--border); border-radius:10px; display:flex; flex-direction:column; }
+  .modal-head { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:center; }
+  .modal-head input { flex:1; padding:7px 10px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; }
+  .modal-head button { padding:7px 12px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:13px; }
+  .modal-list { overflow:auto; padding:6px; min-height:300px; }
+  .entry { padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px; display:flex; align-items:center; gap:8px; }
+  .entry:hover { background:var(--panel2); }
+  .entry .ico { width:16px; text-align:center; color:var(--muted); }
+  .entry.dir { color:var(--accent); }
+  .entry.file { color:var(--text); }
+  .modal-foot { padding:10px 16px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+  .modal-foot button { padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-size:13px; }
+  #pickerCancel { background:var(--panel2); color:var(--text); }
+  #pickerOk { background:var(--accent); color:#fff; }
   .row { display:flex; gap:10px; }
   .row .field { flex:1; }
   .check { display:flex; align-items:center; gap:8px; font-size:13px; }
@@ -178,6 +194,10 @@ const $ = id => document.getElementById(id);
 let pollTimer = null;
 let lastOutput = null;
 
+// ---- 服务端文件选择器 ----
+let pickerFieldId = "video";
+let pickerPath = "";
+
 function autoOutput() {
   const v = $("video").value.trim();
   if (v && !$("output").value.trim()) {
@@ -186,36 +206,48 @@ function autoOutput() {
 }
 
 function pickFile(fieldId) {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.style.display = "none";
-  document.body.appendChild(input);
-  input.onchange = async () => {
-    const file = input.files[0];
-    document.body.removeChild(input);
-    if (!file) return;
-    try {
-      const res = await fetch("/api/upload?name=" + encodeURIComponent(file.name), {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: file,
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error("HTTP " + res.status + " " + text);
-      }
-      const data = await res.json();
-      if (data.path) {
-        $(fieldId).value = data.path;
-        if (fieldId === "video") autoOutput();
+  pickerFieldId = fieldId;
+  $("pickerModal").classList.add("show");
+  loadBrowse("");
+}
+
+async function loadBrowse(path) {
+  const url = path ? "/api/browse?path=" + encodeURIComponent(path) : "/api/browse";
+  const res = await fetch(url);
+  const data = await res.json();
+  pickerPath = data.path;
+  $("pickerPath").value = data.path;
+  const list = $("pickerList");
+  list.innerHTML = "";
+  const up = document.createElement("div");
+  up.className = "entry dir";
+  up.innerHTML = '<span class="ico">↰</span> 上一级';
+  up.onclick = () => loadBrowse(data.parent);
+  list.appendChild(up);
+  data.entries.forEach(e => {
+    const row = document.createElement("div");
+    row.className = e.is_dir ? "entry dir" : "entry file";
+    row.innerHTML = '<span class="ico">' + (e.is_dir ? "📁" : "📄") + '</span> ' + e.name.replace(/</g, "&lt;");
+    row.onclick = () => {
+      if (e.is_dir) {
+        loadBrowse(data.path + "\\" + e.name);
       } else {
-        throw new Error("返回数据缺少路径");
+        $(pickerFieldId).value = data.path + "\\" + e.name;
+        if (pickerFieldId === "video") autoOutput();
+        closePicker();
       }
-    } catch (e) {
-      alert("上传失败：" + e.message);
-    }
-  };
-  input.click();
+    };
+    list.appendChild(row);
+  });
+}
+
+function closePicker() {
+  $("pickerModal").classList.remove("show");
+}
+
+function pickerGo() {
+  const p = $("pickerPath").value.trim();
+  if (p) loadBrowse(p);
 }
 
 function providerChanged() {
@@ -318,5 +350,18 @@ function downloadFile() {
 
 providerChanged();
 </script>
+
+<div class="modal-overlay" id="pickerModal">
+  <div class="modal">
+    <div class="modal-head">
+      <input type="text" id="pickerPath" placeholder="输入路径后回车">
+      <button onclick="pickerGo()">转到</button>
+    </div>
+    <div class="modal-list" id="pickerList"></div>
+    <div class="modal-foot">
+      <button id="pickerCancel" onclick="closePicker()">取消</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

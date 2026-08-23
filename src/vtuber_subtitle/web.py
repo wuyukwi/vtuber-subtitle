@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import re
 import threading
 import time
@@ -19,6 +20,35 @@ def _safe_filename(name: str) -> str:
     name = Path(name).name
     name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name)
     return name or "upload.bin"
+
+
+def _default_browse_path() -> str:
+    for drive in ("D:\\", "E:\\", "C:\\Users"):
+        if Path(drive).exists():
+            return drive
+    return str(Path.home())
+
+
+def _list_dir(path_str: str) -> dict:
+    path = Path(path_str).expanduser()
+    if not path.exists():
+        path = Path(_default_browse_path())
+    if not path.is_dir():
+        path = path.parent
+    try:
+        entries = sorted(
+            ({"name": child.name, "is_dir": child.is_dir()} for child in path.iterdir()),
+            key=lambda e: (not e["is_dir"], e["name"].lower()),
+        )
+    except OSError as exc:
+        entries = []
+        path = Path(_default_browse_path())
+    return {
+        "path": str(path.resolve()),
+        "parent": str(path.parent) if path.parent != path else str(path),
+        "entries": entries,
+        "is_dir": True,
+    }
 
 
 class _Job:
@@ -125,6 +155,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/status":
             self._send(200, json.dumps(JOB.status(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/browse":
+            query = parse_qs(parsed.query)
+            target = query.get("path", [""])[0]
+            if not target:
+                target = _default_browse_path()
+            self._send(200, json.dumps(_list_dir(target), ensure_ascii=False).encode(),
+                       "application/json; charset=utf-8")
             return
         if parsed.path == "/api/download":
             query = parse_qs(parsed.query)
