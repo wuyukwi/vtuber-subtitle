@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -10,6 +11,14 @@ from .env import load_dotenv
 from .pipeline import run
 
 INDEX_FILE = Path(__file__).parent / "index.html"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+UPLOAD_DIR = PROJECT_ROOT / "uploads"
+
+
+def _safe_filename(name: str) -> str:
+    name = Path(name).name
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name)
+    return name or "upload.bin"
 
 
 class _Job:
@@ -154,6 +163,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
             JOB.start(config)
             self._send(200, b'{"started": true}', "application/json; charset=utf-8")
+            return
+        if parsed.path == "/api/upload":
+            length = int(self.headers.get("Content-Length", 0))
+            if length <= 0:
+                self._send(400, b"empty upload", "text/plain; charset=utf-8")
+                return
+            raw = self.rfile.read(length)
+            filename = parse_qs(parsed.query).get("name", [""])[0]
+            safe = _safe_filename(filename)
+            UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            target = UPLOAD_DIR / f"{int(time.time())}_{safe}"
+            target.write_bytes(raw)
+            self._send(200, json.dumps({"path": str(target.resolve())}, ensure_ascii=False).encode(),
+                       "application/json; charset=utf-8")
             return
         self._send(404, b"not found", "text/plain; charset=utf-8")
 

@@ -19,6 +19,10 @@
   .field label { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
   .field input[type=text], .field select { width:100%; padding:8px 10px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; }
   .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
+  .input-row { display:flex; gap:8px; }
+  .input-row input { flex:1; }
+  .browse { flex:0 0 auto; padding:8px 14px; background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer; }
+  .browse:hover { border-color:var(--accent); color:var(--accent); }
   .row { display:flex; gap:10px; }
   .row .field { flex:1; }
   .check { display:flex; align-items:center; gap:8px; font-size:13px; }
@@ -50,8 +54,11 @@
 
     <div class="field">
       <label>视频 / 音频文件路径</label>
-      <input type="text" id="video" placeholder="例如 D:\迅雷下载\xxx.mp4" oninput="autoOutput()">
-      <div class="hint">完整路径，含盘符。</div>
+      <div class="input-row">
+        <input type="text" id="video" placeholder="例如 D:\迅雷下载\xxx.mp4" oninput="autoOutput()">
+        <button class="browse" onclick="pickFile('video')">浏览…</button>
+      </div>
+      <div class="hint">可直接输入完整路径，或用“浏览”从本机选择。</div>
     </div>
 
     <div class="field">
@@ -122,13 +129,21 @@
 
     <div class="field">
       <label>术语表 Glossary（可选）</label>
-      <input type="text" id="glossary" placeholder="glossary.yaml">
+      <div class="input-row">
+        <input type="text" id="glossary" placeholder="glossary.yaml">
+        <button class="browse" onclick="pickFile('glossary')">浏览…</button>
+      </div>
     </div>
 
     <details style="margin-top:4px;">
       <summary class="hint">样式模板（可选，高级）</summary>
       <div style="margin-top:8px;">
-        <div class="field"><label>人工 ASS 模板路径</label><input type="text" id="template" placeholder="D:\...\人工轴.ass"></div>
+        <div class="field"><label>人工 ASS 模板路径</label>
+          <div class="input-row">
+            <input type="text" id="template" placeholder="D:\...\人工轴.ass">
+            <button class="browse" onclick="pickFile('template')">浏览…</button>
+          </div>
+        </div>
         <div class="row">
           <div class="field"><label>日文 Style 名</label><input type="text" id="jpStyle" value="Japanese"></div>
           <div class="field"><label>中文 Style 名</label><input type="text" id="cnStyle" value="Chinese"></div>
@@ -168,6 +183,28 @@ function autoOutput() {
   if (v && !$("output").value.trim()) {
     $("output").value = v.replace(/\.[^.]+$/, "") + ".ass";
   }
+}
+
+async function pickFile(fieldId) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const res = await fetch("/api/upload?name=" + encodeURIComponent(file.name), {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file,
+      });
+      const data = await res.json();
+      $(fieldId).value = data.path;
+      if (fieldId === "video") autoOutput();
+    } catch (e) {
+      alert("上传失败：" + e.message);
+    }
+  };
+  input.click();
 }
 
 function providerChanged() {
