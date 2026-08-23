@@ -27,6 +27,7 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
         condition_on_previous_text=False, word_timestamps=True)
     raw = _split_by_words(list(chunks), max_segment_seconds, pause_threshold)
     raw = _merge_short_fragments(raw)
+    raw = _merge_isolated_fragments(raw)
     return _remove_repeated_hallucinations(raw)
 
 
@@ -89,6 +90,46 @@ def _merge_short_fragments(segments: list[Segment]) -> list[Segment]:
         merged.append(Segment(len(merged), segment.start, segment.end,
                               segment.japanese, segment.chinese))
     return merged
+
+
+_STANDALONE_WORDS: set[str] = set()
+_FRAGMENT_MERGE_GAP = 2.5
+
+
+def _merge_isolated_fragments(segments: list[Segment]) -> list[Segment]:
+    """Merge short filler fragments such as なんか / あと / もう into the closer
+    neighbor instead of leaving them as one-word subtitle lines."""
+    result: list[Segment] = []
+    index = 0
+    total = len(segments)
+    while index < total:
+        segment = segments[index]
+        text = segment.japanese.strip()
+        if len(text) <= 3 and text not in _STANDALONE_WORDS:
+            candidates: list[tuple[str, float]] = []
+            if result and segment.start - result[-1].end <= _FRAGMENT_MERGE_GAP:
+                candidates.append(("previous", segment.start - result[-1].end))
+            if index + 1 < total:
+                next_gap = segments[index + 1].start - segment.end
+                if next_gap <= _FRAGMENT_MERGE_GAP:
+                    candidates.append(("next", next_gap))
+            if candidates:
+                where, _ = min(candidates, key=lambda item: item[1])
+                if where == "previous":
+                    previous = result.pop()
+                    result.append(Segment(previous.id, previous.start, segment.end,
+                                          previous.japanese + text, previous.chinese))
+                    index += 1
+                    continue
+                next_seg = segments[index + 1]
+                result.append(Segment(segment.id, segment.start, next_seg.end,
+                                      text + next_seg.japanese, segment.chinese))
+                index += 2
+                continue
+        result.append(Segment(len(result), segment.start, segment.end,
+                              segment.japanese, segment.chinese))
+        index += 1
+    return result
 
 
 def _remove_repeated_hallucinations(segments: list[Segment]) -> list[Segment]:
