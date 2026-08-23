@@ -46,12 +46,30 @@ def _split_by_words(chunks: list, max_segment_seconds: float,
             gap = float(word.start) - float(previous.end)
             duration = float(previous.end) - float(group[0].start)
             punctuation_break = previous.word.strip().endswith(("。", "？", "！", ".", "?", "!"))
-            if gap >= pause_threshold or duration >= max_segment_seconds or punctuation_break:
+            safe_pause_break = _safe_pause_boundary(group, word)
+            safe_duration_break = _safe_duration_boundary(group, word, max_segment_seconds)
+            if (punctuation_break or
+                    ((gap >= pause_threshold or safe_duration_break) and safe_pause_break)):
                 _append_word_group(result, group)
                 group = []
             group.append(word)
         _append_word_group(result, group)
     return result
+
+
+def _safe_pause_boundary(group: list, next_word) -> bool:
+    previous_text = group[-1].word.strip()
+    if len(previous_text) >= 2:
+        return True
+    if previous_text in {"は", "が", "を", "に", "へ", "で", "と", "も", "の", "から", "まで"}:
+        return True
+    # A one-character BPE token such as ゲ or 一 is usually not a real boundary.
+    return False
+
+
+def _safe_duration_boundary(group: list, next_word, max_segment_seconds: float) -> bool:
+    duration = float(group[-1].end) - float(group[0].start)
+    return duration >= max_segment_seconds and _safe_pause_boundary(group, next_word)
 
 
 def _append_word_group(result: list[Segment], words: list) -> None:
