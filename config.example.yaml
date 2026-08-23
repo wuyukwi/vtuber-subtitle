@@ -1,0 +1,21 @@
+asr:
+  model: medium
+  device: auto
+  compute_type: auto
+  beam_size: 5
+  vad_filter: true
+
+translation:
+  provider: deepseek
+  model: deepseek-chat
+  base_url: https://api.deepseek.com
+  batch_size: 20
+  temperature: 0.2
+
+ass:
+  play_res_x: 1920
+  play_res_y: 1080
+  japanese_font: Noto Sans JP
+  chinese_font: Noto Sans CJK SC
+  japanese_size: 44
+  chinese_size: 42

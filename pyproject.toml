@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vtuber-subtitle"
+version = "0.1.0"
+description = "Create bilingual Japanese/Chinese ASS subtitles from VTuber recordings"
+requires-python = ">=3.11"
+dependencies = [
+  "faster-whisper>=1.1.0",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+vtuber-subtitle = "vtuber_subtitle.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
