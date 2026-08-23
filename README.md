@@ -230,7 +230,7 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--compute-type` | Whisper 计算类型 | `auto` |
 | `--enable-vad` | 启用静音检测，默认开启并保留短语音 | 开启 |
 | `--no-vad` | 关闭静音检测；可能在静音尾部产生重复幻觉字幕 | 关闭 |
-| `--max-segment-seconds` | 单条字幕最大时长，超出后按词级时间拆分 | `7` |
+| `--max-segment-seconds` | 单条字幕最大时长，超出后按词级时间拆分 | `5` |
 | `--pause-threshold` | 词间停顿达到此秒数时断句 | `0.8` |
 | `--start-time` | 原视频起始时间 | 无 |
 | `--end-time` | 原视频结束时间 | 无 |
@@ -282,7 +282,8 @@ vtuber-subtitle --help
 - 默认使用 `large-v3`，优先保证日语识别准确率和不漏轴
 - VAD 默认开启，并配置了语音前后缓冲，避免静音尾部生成重复幻觉字幕
 - 使用词级时间戳：字幕从识别到的第一个词开始，到最后一个词结束，不再直接使用整段粗时间轴
-- 默认每条字幕最长 7 秒，词间停顿超过 0.6 秒时自动断句
+- 默认每条字幕最长 5 秒，词间停顿超过 0.8 秒时自动断句
+- 对 `はい`、`あの` 等应答词，以及日语助词和 `かっていう` 等常见语法边界进行分句
 - GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
 - 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
 - 只有在确认 VAD 误删语音时才使用 `--no-vad`
