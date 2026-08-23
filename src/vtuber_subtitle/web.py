@@ -8,8 +8,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-from .env import load_dotenv
+from .env import ensure_environment
 from .pipeline import run
+
+ensure_environment()
 
 INDEX_FILE = Path(__file__).parent / "index.html"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -72,7 +74,7 @@ class _Job:
         thread.start()
 
     def _work(self, config: dict) -> None:
-        load_dotenv()
+        ensure_environment()
 
         def log(line: str) -> None:
             with self.lock:

@@ -1,11 +1,11 @@
 import argparse
 import sys
-from .env import load_dotenv
+from .env import ensure_environment
 from .pipeline import run
 
 
 def main() -> None:
-    load_dotenv()
+    ensure_environment()
     # Keep Windows consoles from failing when paths contain Japanese characters.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
