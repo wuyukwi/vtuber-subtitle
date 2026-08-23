@@ -255,15 +255,15 @@ vtuber-subtitle --help
 ```text
 .<视频文件名>.vtuber-subtitle/
 ├─ audio.wav
-├─ segments_v11.json
+├─ segments_v14.json
 └─ translated.json
 ```
 
 指定时间范围时，音频缓存文件名会包含起止时间，避免把完整视频音频误当成片段音频。
 
 - `audio.wav`：FFmpeg 提取的音频
-- `segments_v11.json`：词级时间轴重组后的日语识别结果
-- `translated_v11.json`：完整翻译结果
+- `segments_v14.json`：词级时间轴重组后的日语识别结果
+- `translated_v14.json`：完整翻译结果
 
 如果任务中断，再次运行相同视频会复用已经完成的识别和翻译结果。缓存文件中可能包含视频台词，请根据需要保留或删除。`v2` 缓存与旧版粗粒度缓存分开，升级识别算法后会自动重新识别一次。
 
@@ -282,8 +282,8 @@ vtuber-subtitle --help
 - 默认使用 `large-v3`，优先保证日语识别准确率和不漏轴
 - VAD 默认开启，并配置了语音前后缓冲，避免静音尾部生成重复幻觉字幕
 - 使用词级时间戳：字幕从识别到的第一个词开始，到最后一个词结束，不再直接使用整段粗时间轴
-- 默认每条字幕最长 15 秒，优先按句末标记和长停顿断句，避免在句子中间硬切
-- 对 `はい`、`あの` 等应答词，以及日语助词和 `かっていう` 等常见语法边界进行分句
+- 默认每条字幕最长 15 秒，按词级停顿和标点断句
+- 自动合并被 Whisper 拆开的子词片段（如 `ゲ/ーム`），避免单词被从中间切开
 - GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
 - 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
 - 只有在确认 VAD 误删语音时才使用 `--no-vad`
