@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Callable
-from .audio import extract_audio
+from .audio import extract_audio, get_duration
 from .asr.faster_whisper import transcribe
 from .ass import write_ass
 from .glossary import load_glossary
@@ -32,6 +32,41 @@ def _write_segments(path: Path, segments: list[Segment]) -> None:
     path.write_text(json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _format_time(seconds: float) -> str:
+    return f"{seconds:g}"
+
+
+def _build_windows(start: float, end: float, window_minutes: int) -> list[tuple[float, float]]:
+    if window_minutes and window_minutes > 0:
+        windows: list[tuple[float, float]] = []
+        cursor = start
+        step = window_minutes * 60
+        while cursor < end:
+            windows.append((cursor, min(cursor + step, end)))
+            cursor += step
+        return windows
+    return [(start, end)]
+
+
+def _merge_windowed_segments(segments: list[Segment]) -> list[Segment]:
+    """Drop window-boundary duplicates, keeping the more complete copy."""
+    if not segments:
+        return segments
+    ordered = sorted(segments, key=lambda s: (s.start, s.end))
+    merged: list[Segment] = []
+    for segment in ordered:
+        if not merged:
+            merged.append(segment)
+            continue
+        last = merged[-1]
+        if last.end - segment.start > 0.5:
+            if (segment.end - segment.start) > (last.end - last.start):
+                merged[-1] = segment
+        else:
+            merged.append(segment)
+    return merged
+
+
 def run(video: str, output: str, *, glossary: str | None = None, provider: str = "openai",
         model: str | None = None, base_url: str | None = None, asr_model: str = "large-v3",
         device: str = "auto", compute_type: str = "auto", batch_size: int = 20,
@@ -40,7 +75,8 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
         chinese_style: str = "Chinese", max_segment_seconds: float = 15.0,
-        pause_threshold: float = 0.8, log: Callable[[str], None] = print) -> Path:
+        pause_threshold: float = 0.8, window_minutes: int = 15, window_overlap: float = 3.0,
+        log: Callable[[str], None] = print) -> Path:
     video_path = Path(video).resolve()
     if not video_path.is_file():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -50,28 +86,48 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
     end = parse_time(end_time)
     if end is not None and end <= start:
         raise ValueError("end_time must be greater than start_time")
-    audio = work / (f"audio_{start:g}_{end:g}.wav" if start or end is not None else "audio.wav")
-    asr_json = work / "segments_v17.json"
-    translated_json = work / "translated_v17.json"
-    if asr_json.exists():
-        segments = _read_segments(asr_json)
-        log(f"Using cached transcription: {asr_json}")
-    else:
-        if audio.exists():
-            log(f"Using cached audio: {audio}")
-        else:
-            log("Extracting audio...")
-            extract_audio(video_path, audio, start if start else None, end)
-        log(f"Transcribing with faster-whisper ({asr_model})...")
-        segments = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter,
-                              max_segment_seconds=max_segment_seconds,
-                              pause_threshold=pause_threshold)
-        if start:
-            segments = [Segment(s.id, s.start + start, s.end + start, s.japanese, s.chinese)
-                        for s in segments]
-        _write_segments(asr_json, segments)
+
     if subtitle_mode not in ("bilingual", "japanese"):
         raise ValueError("subtitle_mode must be bilingual or japanese")
+
+    if end is None:
+        log("Reading video duration...")
+        end = get_duration(video_path)
+
+    windows = _build_windows(start, end, window_minutes)
+
+    segments: list[Segment] = []
+    for i, (w_start, w_end) in enumerate(windows):
+        extract_start = max(w_start - (window_overlap if i > 0 else 0.0), start)
+        extract_end = min(w_end + window_overlap, end)
+        tag = f"{_format_time(extract_start)}_{_format_time(extract_end)}"
+        audio = work / f"audio_{tag}.wav"
+        asr_json = work / f"segments_{tag}_v17.json"
+        if asr_json.exists():
+            segs = _read_segments(asr_json)
+            log(f"Using cached transcription: {asr_json}")
+        else:
+            if audio.exists():
+                log(f"Using cached audio: {audio}")
+            else:
+                log(f"Extracting audio {_format_time(extract_start)}s-{_format_time(extract_end)}s...")
+                extract_audio(video_path, audio, extract_start, extract_end)
+            log(f"Transcribing {_format_time(extract_start)}s-{_format_time(extract_end)}s ({asr_model})...")
+            segs = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter,
+                              max_segment_seconds=max_segment_seconds,
+                              pause_threshold=pause_threshold)
+            if extract_start:
+                segs = [Segment(s.id, s.start + extract_start, s.end + extract_start,
+                                s.japanese, s.chinese) for s in segs]
+            _write_segments(asr_json, segs)
+        segments.extend(segs)
+    segments = _merge_windowed_segments(segments)
+    segments = [Segment(i, s.start, s.end, s.japanese, s.chinese) for i, s in enumerate(segments)]
+
+    asr_json = work / "segments_v17.json"
+    _write_segments(asr_json, segments)
+
+    translated_json = work / "translated_v17.json"
     if skip_translation or subtitle_mode == "japanese":
         translated = segments
     elif translated_json.exists():
@@ -81,9 +137,9 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         entries = load_glossary(glossary)
         client = TranslationClient(provider, model, base_url, temperature=temperature)
         translated = []
-        for start in range(0, len(segments), batch_size):
-            batch = segments[start:start + batch_size]
-            log(f"Translating {start + 1}-{start + len(batch)} / {len(segments)}...")
+        for batch_start in range(0, len(segments), batch_size):
+            batch = segments[batch_start:batch_start + batch_size]
+            log(f"Translating {batch_start + 1}-{batch_start + len(batch)} / {len(segments)}...")
             translated.extend(client.translate(batch, entries))
         _write_segments(translated_json, translated)
     result = write_ass(translated, output, template=template,

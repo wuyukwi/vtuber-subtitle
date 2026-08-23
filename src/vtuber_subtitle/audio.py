@@ -21,3 +21,16 @@ def extract_audio(video: str | Path, output: str | Path, start: float | None = N
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(f"FFmpeg failed: {exc.stderr[-1000:]}") from exc
     return output_path
+
+
+def get_duration(media: str | Path) -> float:
+    command = ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+               "-of", "default=noprint_wrappers=1:nokey=1", str(media)]
+    try:
+        result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace")
+    except FileNotFoundError as exc:
+        raise RuntimeError("FFmpeg (ffprobe) is not installed or not on PATH") from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"ffprobe failed: {exc.stderr[-500:]}") from exc
+    return float(result.stdout.strip())

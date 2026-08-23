@@ -24,7 +24,8 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
         log_prob_threshold=-1.0, no_speech_threshold=0.6,
         vad_filter=vad_filter, vad_parameters=vad_parameters,
         hallucination_silence_threshold=2.0,
-        condition_on_previous_text=False, word_timestamps=True)
+        condition_on_previous_text=False, word_timestamps=True,
+        chunk_length=30)
     raw = _split_by_words(list(chunks), max_segment_seconds, pause_threshold)
     raw = _merge_short_fragments(raw)
     raw = _merge_isolated_fragments(raw)

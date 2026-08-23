@@ -3,13 +3,35 @@ from vtuber_subtitle.asr.faster_whisper import (
     _split_by_words, _merge_short_fragments, _merge_isolated_fragments,
 )
 from vtuber_subtitle.models import Segment
-from vtuber_subtitle.pipeline import parse_time
+from vtuber_subtitle.pipeline import parse_time, _build_windows, _merge_windowed_segments
 
 
 def test_parse_time():
     assert parse_time("00:20:00") == 1200
     assert parse_time("1:02.5") == 62.5
     assert parse_time("12.5") == 12.5
+
+
+def test_build_windows():
+    assert _build_windows(0, 5471, 15) == [(0, 900), (900, 1800), (1800, 2700), (2700, 3600),
+                                           (3600, 4500), (4500, 5400), (5400, 5471)]
+    assert _build_windows(1200, 1800, 15) == [(1200, 1800)]
+    assert _build_windows(0, 100, 0) == [(0, 100)]
+
+
+def _seg(seq_id, start, end, text):
+    return Segment(seq_id, start, end, text)
+
+
+def test_merge_windowed_segments_dedupe():
+    # 同一句在窗口边界被两个窗口各转录一次（第二个更完整）
+    merged = _merge_windowed_segments([
+        _seg(0, 897.0, 903.0, "中途被截断的句子"),
+        _seg(1, 897.0, 910.0, "中途被截断的句子吗还是完整的"),
+        _seg(2, 912.0, 920.0, "正常句子"),
+    ])
+    assert [s.japanese for s in merged] == ["中途被截断的句子吗还是完整的", "正常句子"]
+    assert merged[0].start == 897.0 and merged[0].end == 910.0
 
 
 def test_split_by_word_timestamps():
@@ -29,10 +51,6 @@ def test_split_by_punctuation():
     chunks = [SimpleNamespace(start=1.0, end=2.6, text="ちょっと待って。次いこう", words=words)]
     result = _split_by_words(chunks, max_segment_seconds=15, pause_threshold=0.8)
     assert [item.japanese for item in result] == ["ちょっと待って。", "次いこう"]
-
-
-def _seg(seq_id, start, end, text):
-    return Segment(seq_id, start, end, text)
 
 
 def test_merge_subword_fragments():

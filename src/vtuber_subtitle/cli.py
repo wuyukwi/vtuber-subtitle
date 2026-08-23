@@ -29,6 +29,8 @@ def main() -> None:
                         help="Maximum subtitle duration before splitting (default: 15)")
     parser.add_argument("--pause-threshold", type=float, default=0.8,
                         help="Split when the word-level pause reaches this many seconds")
+    parser.add_argument("--window-minutes", type=int, default=15,
+                        help="Process long videos in windows of this many minutes to save memory")
     parser.add_argument("--start-time", help="Only process from this source-video time, e.g. 00:20:00")
     parser.add_argument("--end-time", help="Only process until this source-video time, e.g. 00:25:00")
     parser.add_argument("--ass-template", help="Use styles and header from an existing ASS file")
@@ -50,7 +52,7 @@ def main() -> None:
             start_time=args.start_time, end_time=args.end_time,
             template=args.ass_template, japanese_style=args.japanese_style,
             chinese_style=args.chinese_style, max_segment_seconds=args.max_segment_seconds,
-            pause_threshold=args.pause_threshold)
+            pause_threshold=args.pause_threshold, window_minutes=args.window_minutes)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1)
