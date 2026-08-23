@@ -55,7 +55,7 @@
     <div class="field">
       <label>视频 / 音频文件路径</label>
       <div class="input-row">
-        <input type="text" id="video" placeholder="例如 D:\迅雷下载\xxx.mp4" oninput="autoOutput()">
+        <input type="text" id="video" placeholder="例如 D:\视频\xxx.mp4" oninput="autoOutput()">
         <button class="browse" onclick="pickFile('video')">浏览…</button>
       </div>
       <div class="hint">可直接输入完整路径，或用“浏览”从本机选择。</div>
@@ -185,11 +185,14 @@ function autoOutput() {
   }
 }
 
-async function pickFile(fieldId) {
+function pickFile(fieldId) {
   const input = document.createElement("input");
   input.type = "file";
+  input.style.display = "none";
+  document.body.appendChild(input);
   input.onchange = async () => {
     const file = input.files[0];
+    document.body.removeChild(input);
     if (!file) return;
     try {
       const res = await fetch("/api/upload?name=" + encodeURIComponent(file.name), {
@@ -197,9 +200,17 @@ async function pickFile(fieldId) {
         headers: { "Content-Type": "application/octet-stream" },
         body: file,
       });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error("HTTP " + res.status + " " + text);
+      }
       const data = await res.json();
-      $(fieldId).value = data.path;
-      if (fieldId === "video") autoOutput();
+      if (data.path) {
+        $(fieldId).value = data.path;
+        if (fieldId === "video") autoOutput();
+      } else {
+        throw new Error("返回数据缺少路径");
+      }
     } catch (e) {
       alert("上传失败：" + e.message);
     }
