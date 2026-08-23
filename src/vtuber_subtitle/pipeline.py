@@ -39,7 +39,7 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
         chinese_style: str = "Chinese", max_segment_seconds: float = 7.0,
-        pause_threshold: float = 0.6) -> Path:
+        pause_threshold: float = 0.8) -> Path:
     video_path = Path(video).resolve()
     if not video_path.is_file():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -50,8 +50,8 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
     if end is not None and end <= start:
         raise ValueError("end_time must be greater than start_time")
     audio = work / (f"audio_{start:g}_{end:g}.wav" if start or end is not None else "audio.wav")
-    asr_json = work / "segments_v2.json"
-    translated_json = work / "translated_v2.json"
+    asr_json = work / "segments_v5.json"
+    translated_json = work / "translated_v5.json"
     if asr_json.exists():
         segments = _read_segments(asr_json)
         print(f"Using cached transcription: {asr_json}")

@@ -231,7 +231,7 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--enable-vad` | 启用静音检测，默认开启并保留短语音 | 开启 |
 | `--no-vad` | 关闭静音检测；可能在静音尾部产生重复幻觉字幕 | 关闭 |
 | `--max-segment-seconds` | 单条字幕最大时长，超出后按词级时间拆分 | `7` |
-| `--pause-threshold` | 词间停顿达到此秒数时断句 | `0.6` |
+| `--pause-threshold` | 词间停顿达到此秒数时断句 | `0.8` |
 | `--start-time` | 原视频起始时间 | 无 |
 | `--end-time` | 原视频结束时间 | 无 |
 | `--ass-template` | ASS 样式模板路径 | 无 |
@@ -255,15 +255,15 @@ vtuber-subtitle --help
 ```text
 .<视频文件名>.vtuber-subtitle/
 ├─ audio.wav
-├─ segments_v2.json
+├─ segments_v5.json
 └─ translated.json
 ```
 
 指定时间范围时，音频缓存文件名会包含起止时间，避免把完整视频音频误当成片段音频。
 
 - `audio.wav`：FFmpeg 提取的音频
-- `segments_v2.json`：词级时间轴重组后的日语识别结果
-- `translated_v2.json`：完整翻译结果
+- `segments_v5.json`：词级时间轴重组后的日语识别结果
+- `translated_v5.json`：完整翻译结果
 
 如果任务中断，再次运行相同视频会复用已经完成的识别和翻译结果。缓存文件中可能包含视频台词，请根据需要保留或删除。`v2` 缓存与旧版粗粒度缓存分开，升级识别算法后会自动重新识别一次。
 
