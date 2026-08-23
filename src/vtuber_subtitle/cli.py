@@ -23,6 +23,11 @@ def main() -> None:
     parser.add_argument("--compute-type", default="auto", help="Whisper compute type")
     parser.add_argument("--enable-vad", action="store_true",
                         help="Enable VAD for noisy audio; disabled by default to avoid losing short speech")
+    parser.add_argument("--start-time", help="Only process from this source-video time, e.g. 00:20:00")
+    parser.add_argument("--end-time", help="Only process until this source-video time, e.g. 00:25:00")
+    parser.add_argument("--ass-template", help="Use styles and header from an existing ASS file")
+    parser.add_argument("--japanese-style", default="Japanese", help="Japanese style name in ASS template")
+    parser.add_argument("--chinese-style", default="Chinese", help="Chinese style name in ASS template")
     parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--temperature", type=float, default=0.2)
     parser.add_argument("--work-dir", help="Cache directory")
@@ -35,7 +40,10 @@ def main() -> None:
             model=args.model, base_url=args.base_url, asr_model=args.asr_model,
             device=args.device, compute_type=args.compute_type, batch_size=args.batch_size,
             temperature=args.temperature, work_dir=args.work_dir, skip_translation=args.skip_translation,
-            subtitle_mode=args.subtitle_mode, vad_filter=args.enable_vad)
+            subtitle_mode=args.subtitle_mode, vad_filter=args.enable_vad,
+            start_time=args.start_time, end_time=args.end_time,
+            template=args.ass_template, japanese_style=args.japanese_style,
+            chinese_style=args.chinese_style)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1)

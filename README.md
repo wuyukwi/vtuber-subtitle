@@ -143,16 +143,38 @@ vtuber-subtitle input.mp4 `
 
 旧参数 `--skip-translation` 仍然可用。
 
-### 处理指定时间片段
+### 按原视频时间处理指定片段
 
-建议先使用 FFmpeg 截取小片段测试：
+可以直接指定原视频的开始和结束时间。程序只提取并识别该区间，但输出的 ASS 时间轴仍然使用原视频的绝对时间，不会从零开始：
 
 ```powershell
-ffmpeg -ss 00:20:00 -i input.mp4 -t 00:05:00 -map 0 -c copy test.mp4
-vtuber-subtitle test.mp4 -o test.ass --provider opencode-go --model gpt-5.6-luna
+vtuber-subtitle input.mp4 `
+  -o part.ass `
+  --start-time 00:20:00 `
+  --end-time 00:25:00 `
+  --provider opencode-go `
+  --model gpt-5.6-luna
 ```
 
-截取后的视频时间轴从 `00:00:00` 开始，这是正常行为。
+生成的字幕时间轴会落在 `00:20:00` 到 `00:25:00`，可以直接加载回完整视频。也支持秒数或 `MM:SS` 格式，例如 `--start-time 1200 --end-time 1500`。
+
+如果已经用 FFmpeg 截取了片段，片段本身的时间轴从零开始，此时不使用 `--start-time` 即可。
+
+### 使用人工 ASS 作为样式模板
+
+可以导入已有的人工校轴 ASS，保留它的 `[Script Info]`、分辨率、字体、颜色、描边、位置和所有 Style 定义，只替换字幕事件：
+
+```powershell
+vtuber-subtitle input.mp4 `
+  -o output.ass `
+  --ass-template "人工校轴.ass" `
+  --japanese-style "鹿乃                  ——1080p日文（上）" `
+  --chinese-style "鹿乃                  ——1080p中文（下）" `
+  --provider opencode-go `
+  --model gpt-5.6-luna
+```
+
+模板中的 Style 名称必须完全匹配，包括空格、括号和全角字符。可以在 Aegisub 的样式管理器中复制名称。若不指定 `--ass-template`，程序使用内置的日文上方、中文下方样式。
 
 ## Glossary 术语表
 
@@ -206,6 +228,11 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--device` | `auto`、`cpu`、`cuda` | `auto` |
 | `--compute-type` | Whisper 计算类型 | `auto` |
 | `--enable-vad` | 启用静音检测；可能减少漏轴但可能过滤短句 | 关闭 |
+| `--start-time` | 原视频起始时间 | 无 |
+| `--end-time` | 原视频结束时间 | 无 |
+| `--ass-template` | ASS 样式模板路径 | 无 |
+| `--japanese-style` | 模板中的日文 Style 名称 | `Japanese` |
+| `--chinese-style` | 模板中的中文 Style 名称 | `Chinese` |
 | `--batch-size` | 每次发送给 LLM 的片段数 | `20` |
 | `--temperature` | 普通 Chat Completions 的温度 | `0.2` |
 | `--work-dir` | 指定缓存目录 | 视频旁隐藏目录 |
@@ -219,7 +246,7 @@ vtuber-subtitle --help
 
 ## 缓存和断点续跑
 
-默认缓存目录位于输入视频旁边：
+默认缓存目录位于输入视频旁边；使用时间范围或 `--work-dir` 时应为每个任务使用独立目录：
 
 ```text
 .<视频文件名>.vtuber-subtitle/
@@ -227,6 +254,8 @@ vtuber-subtitle --help
 ├─ segments.json
 └─ translated.json
 ```
+
+指定时间范围时，音频缓存文件名会包含起止时间，避免把完整视频音频误当成片段音频。
 
 - `audio.wav`：FFmpeg 提取的音频
 - `segments.json`：日语识别结果和时间轴
