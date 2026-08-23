@@ -202,9 +202,10 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--model` | LLM 模型 ID | 由 Provider 决定 |
 | `--base-url` | OpenAI-compatible API 地址 | 由 Provider 决定 |
 | `--glossary` | YAML/JSON 术语表路径 | 无 |
-| `--asr-model` | Whisper 模型 | `medium` |
+| `--asr-model` | Whisper 模型 | `large-v3` |
 | `--device` | `auto`、`cpu`、`cuda` | `auto` |
 | `--compute-type` | Whisper 计算类型 | `auto` |
+| `--enable-vad` | 启用静音检测；可能减少漏轴但可能过滤短句 | 关闭 |
 | `--batch-size` | 每次发送给 LLM 的片段数 | `20` |
 | `--temperature` | 普通 Chat Completions 的温度 | `0.2` |
 | `--work-dir` | 指定缓存目录 | 视频旁隐藏目录 |
@@ -245,8 +246,11 @@ vtuber-subtitle --help
 
 ## 性能建议
 
-- GPU 显存不足：使用 `--asr-model small --device cpu`
+- 默认使用 `large-v3`，优先保证日语识别准确率和不漏轴
+- VAD 默认关闭，因为它可能误删短句、语气词和低音量说话
+- GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
 - 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
+- 环境噪声很大且静音较多时，再尝试 `--enable-vad`
 - 先用 5 分钟片段测试，再处理整场直播
 - 长视频建议保留缓存目录，避免重复消耗 API 额度
 - 翻译速度和额度消耗主要取决于片段数量、`--batch-size` 和所选模型
@@ -295,7 +299,7 @@ ffmpeg -version
 
 ### Whisper 下载很慢
 
-首次使用会从 Hugging Face 下载模型。可以先使用较小的 `small` 模型，或者提前配置 Hugging Face 网络环境。模型下载完成后会被本地缓存。
+首次使用会从 Hugging Face 下载 `large-v3` 模型，模型较大且 CPU 推理会很慢。模型下载完成后会被本地缓存。若只做快速测试，可以显式使用 `--asr-model medium`，但这会牺牲一部分识别准确率。
 
 ### PowerShell 显示乱码
 

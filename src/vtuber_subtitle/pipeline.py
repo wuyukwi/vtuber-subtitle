@@ -20,7 +20,7 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         model: str | None = None, base_url: str | None = None, asr_model: str = "medium",
         device: str = "auto", compute_type: str = "auto", batch_size: int = 20,
         temperature: float = 0.2, work_dir: str | None = None, skip_translation: bool = False,
-        subtitle_mode: str = "bilingual") -> Path:
+        subtitle_mode: str = "bilingual", vad_filter: bool = False) -> Path:
     video_path = Path(video).resolve()
     if not video_path.is_file():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -33,10 +33,13 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         segments = _read_segments(asr_json)
         print(f"Using cached transcription: {asr_json}")
     else:
-        print("Extracting audio...")
-        extract_audio(video_path, audio)
+        if audio.exists():
+            print(f"Using cached audio: {audio}")
+        else:
+            print("Extracting audio...")
+            extract_audio(video_path, audio)
         print(f"Transcribing with faster-whisper ({asr_model})...")
-        segments = transcribe(audio, asr_model, device, compute_type)
+        segments = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter)
         _write_segments(asr_json, segments)
     if subtitle_mode not in ("bilingual", "japanese"):
         raise ValueError("subtitle_mode must be bilingual or japanese")

@@ -1,9 +1,10 @@
 asr:
-  model: medium
+  model: large-v3
   device: auto
   compute_type: auto
   beam_size: 5
-  vad_filter: true
+  vad_filter: false
+  # VAD may remove short speech; keep disabled for highest recall.
 
 translation:
   provider: deepseek
