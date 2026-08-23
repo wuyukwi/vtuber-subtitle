@@ -5,7 +5,7 @@ from ..models import Segment
 
 def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "auto",
                compute_type: str = "auto", beam_size: int = 5, vad_filter: bool = True,
-               max_segment_seconds: float = 7.0, pause_threshold: float = 0.8) -> list[Segment]:
+               max_segment_seconds: float = 5.0, pause_threshold: float = 0.8) -> list[Segment]:
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
@@ -64,7 +64,9 @@ def _append_word_group(result: list[Segment], words: list) -> None:
 
 
 def _append_text_with_split(result: list[Segment], start: float, end: float, text: str) -> None:
-    pieces = _split_short_response(text)
+    pieces: list[str] = []
+    for piece in _split_short_response(text):
+        pieces.extend(_split_clause_text(piece))
     if len(pieces) == 1:
         result.append(Segment(len(result), start, end, text))
         return
@@ -76,6 +78,33 @@ def _append_text_with_split(result: list[Segment], start: float, end: float, tex
         piece_end = start + duration * next_cursor / len(text)
         result.append(Segment(len(result), piece_start, piece_end, piece))
         cursor = next_cursor
+
+
+def _split_clause_text(text: str) -> list[str]:
+    """Split common Japanese clause boundaries without splitting a short word."""
+    if len(text) < 10:
+        return [text]
+    trailing = re.search(r"(?:\s+)(あの|えっと|その)$", text)
+    if trailing and trailing.start() >= 6:
+        return [text[:trailing.start()].rstrip(), trailing.group(1)]
+    cuts: list[int] = []
+    for match in re.finditer(r"か(?=っていう|って)", text):
+        cuts.append(match.start() + 1)
+    for match in re.finditer(r"は", text):
+        if match.start() >= 8 and len(text) - match.end() >= 4:
+            cuts.append(match.end())
+    for match in re.finditer(r"に", text):
+        if 6 <= match.start() < 15 and len(text) - match.end() >= 5:
+            cuts.append(match.end())
+    if not cuts:
+        return [text]
+    pieces = []
+    previous = 0
+    for cut in sorted(set(cuts)):
+        pieces.append(text[previous:cut])
+        previous = cut
+    pieces.append(text[previous:])
+    return [piece for piece in pieces if piece]
 
 
 def _split_short_response(text: str) -> list[str]:

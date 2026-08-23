@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from vtuber_subtitle.asr.faster_whisper import _split_by_words, _split_short_response
+from vtuber_subtitle.asr.faster_whisper import _split_by_words, _split_clause_text, _split_short_response
 from vtuber_subtitle.pipeline import parse_time
 
 
@@ -32,3 +32,13 @@ def test_split_short_response_without_word_timestamps():
     chunks = [SimpleNamespace(start=1.0, end=4.0, text="はい想像", words=None)]
     result = _split_by_words(chunks, max_segment_seconds=7, pause_threshold=0.8)
     assert [item.japanese for item in result] == ["はい", "想像"]
+
+
+def test_split_japanese_clauses():
+    assert _split_clause_text("クリスマスプレゼントとお誕生日プレゼントは一緒にされましたかっていう質問は") == [
+        "クリスマスプレゼントとお誕生日プレゼントは", "一緒にされましたか", "っていう質問は"
+    ]
+    assert _split_clause_text("ゴールデンタイムに午後寝ることないなぁと思ってからはちょっと今を満喫しようと思って") == [
+        "ゴールデンタイムに", "午後寝ることないなぁと思ってからは", "ちょっと今を満喫しようと思って"
+    ]
+    assert _split_clause_text("起きてるなぁと思って あの") == ["起きてるなぁと思って", "あの"]
