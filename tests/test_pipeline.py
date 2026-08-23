@@ -1,5 +1,8 @@
 from types import SimpleNamespace
-from vtuber_subtitle.asr.faster_whisper import _split_by_words, _split_clause_text, _split_short_response
+from vtuber_subtitle.asr.faster_whisper import (
+    _split_by_words, _split_clause_text, _split_short_response, _merge_short_fragments,
+)
+from vtuber_subtitle.models import Segment
 from vtuber_subtitle.pipeline import parse_time
 
 
@@ -42,3 +45,47 @@ def test_split_japanese_clauses():
         "ゴールデンタイムに", "午後寝ることないなぁと思ってからは", "ちょっと今を満喫しようと思って"
     ]
     assert _split_clause_text("起きてるなぁと思って あの") == ["起きてるなぁと思って", "あの"]
+
+
+def _seg(seq_id, start, end, text):
+    return Segment(seq_id, start, end, text)
+
+
+def test_merge_subword_fragments():
+    merged = _merge_short_fragments([
+        _seg(0, 0.0, 1.0, "絵とか漫画は結構濃いかもし"),
+        _seg(1, 1.0, 1.8, "れないですね"),
+    ])
+    assert len(merged) == 1
+    assert merged[0].japanese == "絵とか漫画は結構濃いかもしれないですね"
+    assert merged[0].start == 0.0
+    assert merged[0].end == 1.8
+
+
+def test_merge_cohesive_fragment():
+    merged = _merge_short_fragments([
+        _seg(0, 5.0, 8.0, "歌もゲームもコラボした"),
+        _seg(1, 8.0, 9.0, "いですお願いします"),
+    ])
+    assert len(merged) == 1
+    assert merged[0].japanese == "歌もゲームもコラボしたいですお願いします"
+
+
+def test_do_not_merge_response_or_complete():
+    merged = _merge_short_fragments([
+        _seg(0, 0.0, 0.5, "はい"),
+        _seg(1, 0.6, 1.2, "で誕生日は12月24日です"),
+        _seg(2, 2.0, 3.0, "そんな感じです"),
+        _seg(3, 3.1, 4.0, "おすすめの漫画あったら"),
+    ])
+    assert [item.japanese for item in merged] == [
+        "はい", "で誕生日は12月24日です", "そんな感じです", "おすすめの漫画あったら"
+    ]
+
+
+def test_do_not_merge_negative_complete_ending():
+    merged = _merge_short_fragments([
+        _seg(0, 0.0, 2.0, "ーとはまた違うかもしれない"),
+        _seg(1, 2.0, 4.0, "ないんですけど"),
+    ])
+    assert [item.japanese for item in merged] == ["ーとはまた違うかもしれない", "ないんですけど"]

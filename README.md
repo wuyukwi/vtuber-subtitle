@@ -255,15 +255,15 @@ vtuber-subtitle --help
 ```text
 .<视频文件名>.vtuber-subtitle/
 ├─ audio.wav
-├─ segments_v8.json
+├─ segments_v10.json
 └─ translated.json
 ```
 
 指定时间范围时，音频缓存文件名会包含起止时间，避免把完整视频音频误当成片段音频。
 
 - `audio.wav`：FFmpeg 提取的音频
-- `segments_v8.json`：词级时间轴重组后的日语识别结果
-- `translated_v8.json`：完整翻译结果
+- `segments_v10.json`：词级时间轴重组后的日语识别结果
+- `translated_v10.json`：完整翻译结果
 
 如果任务中断，再次运行相同视频会复用已经完成的识别和翻译结果。缓存文件中可能包含视频台词，请根据需要保留或删除。`v2` 缓存与旧版粗粒度缓存分开，升级识别算法后会自动重新识别一次。
 

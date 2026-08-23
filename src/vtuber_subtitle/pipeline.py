@@ -50,8 +50,8 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
     if end is not None and end <= start:
         raise ValueError("end_time must be greater than start_time")
     audio = work / (f"audio_{start:g}_{end:g}.wav" if start or end is not None else "audio.wav")
-    asr_json = work / "segments_v8.json"
-    translated_json = work / "translated_v8.json"
+    asr_json = work / "segments_v10.json"
+    translated_json = work / "translated_v10.json"
     if asr_json.exists():
         segments = _read_segments(asr_json)
         print(f"Using cached transcription: {asr_json}")

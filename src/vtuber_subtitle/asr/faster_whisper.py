@@ -134,17 +134,50 @@ def _split_short_response(text: str) -> list[str]:
     return [text[:point], text[point:]]
 
 
+_KANA_START = "\u3041"
+_KANA_END = "\u30ff"
+
+
+def _is_kana(char: str) -> bool:
+    return _KANA_START <= char <= _KANA_END
+
+
+_COMPLETE_ENDINGS = (
+    "ですね", "ですか", "ましたね", "ません", "ました", "です", "ます",
+    "でしょう", "なかった", "ない", "なぁ", "な", "ね", "よ", "ぞ", "わ",
+    "か", "けど", "から", "ので", "って", "んだ", "ん", "の", "だ", "と",
+    "も", "へ", "に", "で", "が", "は", "を", "から", "まで", "では", "ではね",
+)
+_TRAILING_FILLERS = ("あの", "えっと", "うん", "ええ", "ねえ", "ああ")
+
+
+def _should_merge_fragments(previous: Segment, current: Segment) -> bool:
+    prev_text = previous.japanese.strip()
+    curr_text = current.japanese.strip()
+    if not prev_text or not curr_text:
+        return False
+    if prev_text in {"はい", "ええ", "うん", "あの", "えっと", "そう", "じゃ", "じゃあ"}:
+        return False
+    if current.start - previous.end > 0.8:
+        return False
+    if prev_text.endswith(("。", "？", "！", ".", "?", "!")):
+        return False
+    if not _is_kana(prev_text[-1]) or not _is_kana(curr_text[0]):
+        return False
+    if prev_text.endswith(_TRAILING_FILLERS):
+        return False
+    if prev_text.endswith(_COMPLETE_ENDINGS):
+        return False
+    return True
+
+
 def _merge_short_fragments(segments: list[Segment]) -> list[Segment]:
-    """Join timestamp artifacts such as ゲ / ームは好 back into one subtitle."""
+    """Join sub-word fragments such as コラボした / いです back into one subtitle."""
     merged: list[Segment] = []
-    response_words = {"はい", "ええ", "うん", "あの", "えっと"}
     for segment in segments:
-        if (merged and len(merged[-1].japanese) <= 3 and
-                merged[-1].japanese not in response_words and
-                segment.start - merged[-1].end <= 2.0 and
-                not merged[-1].japanese.endswith(("。", "？", "！", ".", "?", "!"))):
+        if merged and _should_merge_fragments(merged[-1], segment):
             previous = merged.pop()
-            segment = Segment(segment.id, previous.start, segment.end,
+            segment = Segment(previous.id, previous.start, segment.end,
                               previous.japanese + segment.japanese, segment.chinese)
         merged.append(Segment(len(merged), segment.start, segment.end,
                               segment.japanese, segment.chinese))
