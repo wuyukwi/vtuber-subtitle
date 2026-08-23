@@ -227,7 +227,8 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--asr-model` | Whisper 模型 | `large-v3` |
 | `--device` | `auto`、`cpu`、`cuda` | `auto` |
 | `--compute-type` | Whisper 计算类型 | `auto` |
-| `--enable-vad` | 启用静音检测；可能减少漏轴但可能过滤短句 | 关闭 |
+| `--enable-vad` | 启用静音检测，默认开启并保留短语音 | 开启 |
+| `--no-vad` | 关闭静音检测；可能在静音尾部产生重复幻觉字幕 | 关闭 |
 | `--start-time` | 原视频起始时间 | 无 |
 | `--end-time` | 原视频结束时间 | 无 |
 | `--ass-template` | ASS 样式模板路径 | 无 |
@@ -276,10 +277,10 @@ vtuber-subtitle --help
 ## 性能建议
 
 - 默认使用 `large-v3`，优先保证日语识别准确率和不漏轴
-- VAD 默认关闭，因为它可能误删短句、语气词和低音量说话
+- VAD 默认开启，并配置了语音前后缓冲，避免静音尾部生成重复幻觉字幕
 - GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
 - 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
-- 环境噪声很大且静音较多时，再尝试 `--enable-vad`
+- 只有在确认 VAD 误删语音时才使用 `--no-vad`
 - 先用 5 分钟片段测试，再处理整场直播
 - 长视频建议保留缓存目录，避免重复消耗 API 额度
 - 翻译速度和额度消耗主要取决于片段数量、`--batch-size` 和所选模型

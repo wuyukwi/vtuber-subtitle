@@ -21,8 +21,10 @@ def main() -> None:
     parser.add_argument("--asr-model", default="large-v3", help="Whisper model, e.g. medium, large-v3")
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--compute-type", default="auto", help="Whisper compute type")
-    parser.add_argument("--enable-vad", action="store_true",
-                        help="Enable VAD for noisy audio; disabled by default to avoid losing short speech")
+    parser.add_argument("--enable-vad", action="store_true", dest="enable_vad", default=True,
+                        help="Enable VAD (default; tuned to preserve short speech)")
+    parser.add_argument("--no-vad", action="store_false", dest="enable_vad",
+                        help="Disable VAD; may cause repeated hallucinated subtitles during silence")
     parser.add_argument("--start-time", help="Only process from this source-video time, e.g. 00:20:00")
     parser.add_argument("--end-time", help="Only process until this source-video time, e.g. 00:25:00")
     parser.add_argument("--ass-template", help="Use styles and header from an existing ASS file")

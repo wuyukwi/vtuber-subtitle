@@ -35,7 +35,7 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         model: str | None = None, base_url: str | None = None, asr_model: str = "large-v3",
         device: str = "auto", compute_type: str = "auto", batch_size: int = 20,
         temperature: float = 0.2, work_dir: str | None = None, skip_translation: bool = False,
-        subtitle_mode: str = "bilingual", vad_filter: bool = False,
+        subtitle_mode: str = "bilingual", vad_filter: bool = True,
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
         chinese_style: str = "Chinese") -> Path:
