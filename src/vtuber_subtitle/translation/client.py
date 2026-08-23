@@ -28,12 +28,13 @@ class TranslationClient:
         self.base_url = (base_url or os.getenv("OPENCODE_BASE_URL" if self.provider in ("opencode", "opencode-go") else "LLM_BASE_URL", default_url)).rstrip("/")
         self.api_key = api_key or (os.getenv("GEMINI_API_KEY") if self.provider == "gemini"
                                    else (os.getenv("OPENCODE_API_KEY") if self.provider in ("opencode", "opencode-go")
-                                         else os.getenv("LLM_API_KEY")))
+                                         else (os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"))))
         self.temperature = temperature
         self.retries = retries
         if not self.api_key:
             variable = ("GEMINI_API_KEY" if self.provider == "gemini" else
-                        ("OPENCODE_API_KEY" if self.provider in ("opencode", "opencode-go") else "LLM_API_KEY"))
+                        ("OPENCODE_API_KEY" if self.provider in ("opencode", "opencode-go") else
+                         "DEEPSEEK_API_KEY or LLM_API_KEY"))
             raise ValueError(f"Missing API key. Set {variable} in the environment.")
 
     def translate(self, segments: list[Segment], glossary: list[dict[str, str]]) -> list[Segment]:
