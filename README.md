@@ -9,6 +9,7 @@
 - OpenCode Go、OpenAI-compatible API、Gemini
 - YAML 或 JSON 自定义术语表
 - 自动缓存识别和翻译结果，支持中断后继续
+- 使用词级时间轴裁剪字幕起止时间并优化断句
 
 ## 工作流程
 
@@ -229,6 +230,8 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--compute-type` | Whisper 计算类型 | `auto` |
 | `--enable-vad` | 启用静音检测，默认开启并保留短语音 | 开启 |
 | `--no-vad` | 关闭静音检测；可能在静音尾部产生重复幻觉字幕 | 关闭 |
+| `--max-segment-seconds` | 单条字幕最大时长，超出后按词级时间拆分 | `7` |
+| `--pause-threshold` | 词间停顿达到此秒数时断句 | `0.6` |
 | `--start-time` | 原视频起始时间 | 无 |
 | `--end-time` | 原视频结束时间 | 无 |
 | `--ass-template` | ASS 样式模板路径 | 无 |
@@ -252,17 +255,17 @@ vtuber-subtitle --help
 ```text
 .<视频文件名>.vtuber-subtitle/
 ├─ audio.wav
-├─ segments.json
+├─ segments_v2.json
 └─ translated.json
 ```
 
 指定时间范围时，音频缓存文件名会包含起止时间，避免把完整视频音频误当成片段音频。
 
 - `audio.wav`：FFmpeg 提取的音频
-- `segments.json`：日语识别结果和时间轴
-- `translated.json`：完整翻译结果
+- `segments_v2.json`：词级时间轴重组后的日语识别结果
+- `translated_v2.json`：完整翻译结果
 
-如果任务中断，再次运行相同视频会复用已经完成的识别和翻译结果。缓存文件中可能包含视频台词，请根据需要保留或删除。
+如果任务中断，再次运行相同视频会复用已经完成的识别和翻译结果。缓存文件中可能包含视频台词，请根据需要保留或删除。`v2` 缓存与旧版粗粒度缓存分开，升级识别算法后会自动重新识别一次。
 
 ## ASS 字幕格式
 
@@ -278,6 +281,8 @@ vtuber-subtitle --help
 
 - 默认使用 `large-v3`，优先保证日语识别准确率和不漏轴
 - VAD 默认开启，并配置了语音前后缓冲，避免静音尾部生成重复幻觉字幕
+- 使用词级时间戳：字幕从识别到的第一个词开始，到最后一个词结束，不再直接使用整段粗时间轴
+- 默认每条字幕最长 7 秒，词间停顿超过 0.6 秒时自动断句
 - GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
 - 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
 - 只有在确认 VAD 误删语音时才使用 `--no-vad`

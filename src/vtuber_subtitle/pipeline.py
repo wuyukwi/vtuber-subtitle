@@ -38,7 +38,8 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         subtitle_mode: str = "bilingual", vad_filter: bool = True,
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
-        chinese_style: str = "Chinese") -> Path:
+        chinese_style: str = "Chinese", max_segment_seconds: float = 7.0,
+        pause_threshold: float = 0.6) -> Path:
     video_path = Path(video).resolve()
     if not video_path.is_file():
         raise FileNotFoundError(f"Video not found: {video_path}")
@@ -49,8 +50,8 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
     if end is not None and end <= start:
         raise ValueError("end_time must be greater than start_time")
     audio = work / (f"audio_{start:g}_{end:g}.wav" if start or end is not None else "audio.wav")
-    asr_json = work / "segments.json"
-    translated_json = work / "translated.json"
+    asr_json = work / "segments_v2.json"
+    translated_json = work / "translated_v2.json"
     if asr_json.exists():
         segments = _read_segments(asr_json)
         print(f"Using cached transcription: {asr_json}")
@@ -61,7 +62,9 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
             print("Extracting audio...")
             extract_audio(video_path, audio, start if start else None, end)
         print(f"Transcribing with faster-whisper ({asr_model})...")
-        segments = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter)
+        segments = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter,
+                              max_segment_seconds=max_segment_seconds,
+                              pause_threshold=pause_threshold)
         if start:
             segments = [Segment(s.id, s.start + start, s.end + start, s.japanese, s.chinese)
                         for s in segments]

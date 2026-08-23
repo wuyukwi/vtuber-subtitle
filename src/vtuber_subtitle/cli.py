@@ -25,6 +25,10 @@ def main() -> None:
                         help="Enable VAD (default; tuned to preserve short speech)")
     parser.add_argument("--no-vad", action="store_false", dest="enable_vad",
                         help="Disable VAD; may cause repeated hallucinated subtitles during silence")
+    parser.add_argument("--max-segment-seconds", type=float, default=7.0,
+                        help="Maximum subtitle duration before splitting (default: 7)")
+    parser.add_argument("--pause-threshold", type=float, default=0.6,
+                        help="Split when the word-level pause reaches this many seconds")
     parser.add_argument("--start-time", help="Only process from this source-video time, e.g. 00:20:00")
     parser.add_argument("--end-time", help="Only process until this source-video time, e.g. 00:25:00")
     parser.add_argument("--ass-template", help="Use styles and header from an existing ASS file")
@@ -45,7 +49,8 @@ def main() -> None:
             subtitle_mode=args.subtitle_mode, vad_filter=args.enable_vad,
             start_time=args.start_time, end_time=args.end_time,
             template=args.ass_template, japanese_style=args.japanese_style,
-            chinese_style=args.chinese_style)
+            chinese_style=args.chinese_style, max_segment_seconds=args.max_segment_seconds,
+            pause_threshold=args.pause_threshold)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1)
