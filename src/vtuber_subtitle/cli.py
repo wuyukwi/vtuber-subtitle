@@ -12,8 +12,8 @@ def main() -> None:
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Convert a Japanese VTuber recording to bilingual ASS subtitles")
-    parser.add_argument("video", help="Input video/audio file")
-    parser.add_argument("-o", "--output", required=True, help="Output .ass path")
+    parser.add_argument("video", help="Input video/audio file path or YouTube URL")
+    parser.add_argument("-o", "--output", help="Output .ass path (auto-generated if not specified)")
     parser.add_argument("--glossary", help="Glossary .yaml/.yml/.json")
     parser.add_argument("--provider", choices=["openai", "deepseek", "gemini", "opencode-go"], default="openai")
     parser.add_argument("--model", help="LLM model name")
@@ -43,6 +43,19 @@ def main() -> None:
                         help="Subtitle type: bilingual (default) or japanese")
     parser.add_argument("--skip-translation", action="store_true", help="Export Japanese-only ASS")
     args = parser.parse_args()
+    
+    # Auto-generate output path if not provided
+    if not args.output:
+        from .youtube import is_youtube_url
+        if is_youtube_url(args.video):
+            # For YouTube URLs, output will be generated in pipeline
+            args.output = ""
+        else:
+            # For local files, generate output path based on input
+            from pathlib import Path
+            video_path = Path(args.video).resolve()
+            args.output = str(video_path.with_suffix(".ass"))
+    
     try:
         run(args.video, args.output, glossary=args.glossary, provider=args.provider,
             model=args.model, base_url=args.base_url, asr_model=args.asr_model,

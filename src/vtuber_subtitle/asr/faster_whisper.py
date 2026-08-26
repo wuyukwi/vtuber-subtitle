@@ -11,6 +11,10 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
         from faster_whisper import WhisperModel
     except ImportError as exc:
         raise RuntimeError("Install dependencies first: pip install -e .") from exc
+    
+    # Add NVIDIA CUDA libraries to PATH if installed via pip
+    _add_nvidia_cuda_to_path()
+    
     if device == "auto":
         device = "cuda" if _cuda_available() else "cpu"
     if compute_type == "auto":
@@ -151,3 +155,25 @@ def _cuda_available() -> bool:
         return ctranslate2.get_cuda_device_count() > 0
     except Exception:
         return False
+
+
+def _add_nvidia_cuda_to_path() -> None:
+    """Add NVIDIA CUDA pip packages' bin directories to PATH/OS environment so
+    ctranslate2 can find cublas64_12.dll and cudnn64_9.dll."""
+    import os
+    import site
+
+    for site_dir in site.getsitepackages() + [site.getusersitepackages()]:
+        cuda_base = Path(site_dir) / "nvidia"
+        if not cuda_base.is_dir():
+            continue
+        for sub in cuda_base.iterdir():
+            for folder in ("bin", "lib"):
+                target = sub / folder
+                if target.is_dir():
+                    path_str = str(target)
+                    if path_str not in os.environ.get("PATH", ""):
+                        os.environ["PATH"] = path_str + os.pathsep + os.environ.get("PATH", "")
+                    # On Windows, also set CUDA_PATH-like vars that some libs use
+                    if folder == "bin":
+                        os.add_dll_directory(path_str)

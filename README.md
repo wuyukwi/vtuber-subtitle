@@ -1,6 +1,6 @@
 # VTuber Subtitle
 
-一个纯命令行的日本 VTuber 直播录像字幕工具。它会从视频中提取音频，使用本地 Whisper 识别日语语音和时间轴，再调用 LLM 翻译成中文，最后生成 Aegisub 可以直接打开的 `.ass` 字幕文件。
+一个命令行工具，支持从**本地视频文件**或 **YouTube 链接**生成日本 VTuber 直播字幕。它会从视频（或 YouTube 音频）中提取音轨，使用本地 Whisper 识别日语语音和时间轴，再调用 LLM 翻译成中文，最后生成 Aegisub 可以直接打开的 `.ass` 字幕文件。
 
 支持以下模式：
 
@@ -14,8 +14,8 @@
 ## 工作流程
 
 ```text
-视频文件
-  -> FFmpeg 提取单声道 16 kHz 音频
+视频文件或 YouTube 链接
+  -> FFmpeg 提取单声道 16 kHz 音频（YouTube 链接会先通过 yt-dlp 下载音频）
   -> faster-whisper 识别日语和时间轴
   -> 按批次调用 LLM 翻译
   -> 合并日文与中文
@@ -38,6 +38,7 @@ Windows 使用 Scoop 安装 Python 和 FFmpeg：
 
 ```powershell
 scoop install python
+scoop install ffmpeg
 ```
 
 如果 Scoop 的 FFmpeg 清单无法下载，可以使用 WinGet：
@@ -112,16 +113,30 @@ GEMINI_MODEL=gemini-2.0-flash
 
 ## 基本用法
 
-### 生成 OpenCode Go 双语字幕
+### 从 YouTube 链接生成字幕
+
+可以直接使用 YouTube 视频链接，工具会自动下载音频并处理：
 
 ```powershell
 cd C:\Users\Administrator\vtuber-subtitle
 .venv\Scripts\Activate.ps1
 
-vtuber-subtitle input.mp4 `
-  --output output.ass `
-  --provider opencode-go `
-  --model gpt-5.6-luna
+vtuber-subtitle "https://www.youtube.com/watch?v=VIDEO_ID" -o output.ass --provider opencode-go --model gpt-5.6-luna
+```
+
+支持的 YouTube 链接格式：
+- `https://www.youtube.com/watch?v=VIDEO_ID`
+- `https://youtu.be/VIDEO_ID`
+
+如果不指定输出路径，会自动保存到视频文件同目录。
+
+### 从本地文件生成字幕
+
+```powershell
+cd C:\Users\Administrator\vtuber-subtitle
+.venv\Scripts\Activate.ps1
+
+vtuber-subtitle input.mp4 --output output.ass --provider opencode-go --model gpt-5.6-luna
 ```
 
 也可以使用模块方式运行：
@@ -173,14 +188,15 @@ http://127.0.0.1:8000
 
 界面支持：
 
-- 视频路径、输出路径
+- 视频路径（本地文件）或 YouTube 链接
+- 输出路径（本地文件时自动生成，YouTube 时自动保存到 youtube_downloads 目录）
 - 起始 / 结束时间（按原视频时间）
 - 双语 / 仅日文字幕
 - 翻译服务（DeepSeek / OpenCode Go / OpenAI / Gemini）与模型
 - ASR 模型、设备、计算类型
 - 术语表、人工 ASS 样式模板
 - 实时运行日志、完成后一键下载 ASS
-- 视频、术语表、模板都可点「浏览…」打开本地文件选择框（服务端直接列目录取真实路径，不上传文件），也可手动输入完整路径
+- 视频、术语表、模板都可点「浏览…」打开本地文件选择框（服务端直接列目录取真实路径，不上传文件），也可手动输入完整路径或 YouTube 链接
 
 默认只监听本机 `127.0.0.1`。需要换端口：
 
@@ -276,8 +292,8 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 
 | 参数 | 说明 | 默认值 |
 | --- | --- | --- |
-| `video` | 输入视频或音频路径 | 必填 |
-| `-o`, `--output` | 输出 ASS 路径 | 必填 |
+| `video` | 输入视频/音频路径或 YouTube 链接 | 必填 |
+| `-o`, `--output` | 输出 ASS 路径 | 自动生成（与输入同名或保存到 youtube_downloads） |
 | `--subtitle-mode` | `bilingual` 或 `japanese` | `bilingual` |
 | `--provider` | `openai`、`deepseek`、`gemini`、`opencode-go` | `openai` |
 | `--model` | LLM 模型 ID | 由 Provider 决定 |
@@ -344,12 +360,13 @@ vtuber-subtitle --help
 - 自动合并被 Whisper 拆开的子词片段（如 `ゲ/ーム`），避免单词被从中间切开
 - `なんか`、`あと`、`はい` 这类一两个字的短片段，只要附近有相邻字幕就自动并入，只有真正孤立（前后都隔开较远）时才单独成轴
 - GPU 显存不足：使用 `--asr-model medium --device cpu --compute-type int8`
-- 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`
+- 有 NVIDIA GPU：使用 `--device cuda --compute-type float16`（项目会自动查找 pip 安装的 NVIDIA CUDA 库）
 - 只有在确认 VAD 误删语音时才使用 `--no-vad`
 - 先用 5 分钟片段测试，再处理整场直播
 - 长视频建议保留缓存目录，避免重复消耗 API 额度
 - 长视频默认按 15 分钟窗口切分处理（可 `--window-minutes` 调整），每段只占少量内存，避免整段加载导致内存不足；窗口有 3 秒重叠并自动去重，不会在窗口边界切断句子
 - 翻译速度和额度消耗主要取决于片段数量、`--batch-size` 和所选模型
+- YouTube 链接会使用 yt-dlp 下载音频到 `youtube_downloads/` 目录，已下载的音频会缓存复用
 
 ## 测试
 
@@ -366,6 +383,23 @@ cd C:\Users\Administrator\vtuber-subtitle
 - Glossary 格式化
 
 ## 常见问题
+
+### `Library cublas64_12.dll is not found`
+
+使用 GPU 时如果遇到此错误，安装 NVIDIA CUDA pip 包即可：
+
+```powershell
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12 nvidia-cuda-runtime-cu12
+```
+
+项目会自动查找这些库的路径，无需手动配置环境变量。
+
+### yt-dlp 下载失败
+
+确保已安装 yt-dlp（项目依赖会自动安装）。如果下载失败：
+- 检查网络连接
+- YouTube 链接是否有效
+- 尝试更新 yt-dlp：`pip install --upgrade yt-dlp`
 
 ### `OPENCODE_API_KEY` 缺失
 

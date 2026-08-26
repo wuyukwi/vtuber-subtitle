@@ -7,6 +7,7 @@ from .ass import write_ass
 from .glossary import load_glossary
 from .models import Segment
 from .translation.client import TranslationClient
+from .youtube import is_youtube_url, extract_audio_from_youtube
 
 
 def parse_time(value: str | float | None) -> float | None:
@@ -67,7 +68,7 @@ def _merge_windowed_segments(segments: list[Segment]) -> list[Segment]:
     return merged
 
 
-def run(video: str, output: str, *, glossary: str | None = None, provider: str = "openai",
+def run(video: str, output: str | None, *, glossary: str | None = None, provider: str = "openai",
         model: str | None = None, base_url: str | None = None, asr_model: str = "large-v3",
         device: str = "auto", compute_type: str = "auto", batch_size: int = 20,
         temperature: float = 0.2, work_dir: str | None = None, skip_translation: bool = False,
@@ -77,11 +78,32 @@ def run(video: str, output: str, *, glossary: str | None = None, provider: str =
         chinese_style: str = "Chinese", max_segment_seconds: float = 15.0,
         pause_threshold: float = 0.8, window_minutes: int = 15, window_overlap: float = 3.0,
         log: Callable[[str], None] = print) -> Path:
-    video_path = Path(video).resolve()
-    if not video_path.is_file():
-        raise FileNotFoundError(f"Video not found: {video_path}")
-    work = Path(work_dir) if work_dir else video_path.parent / f".{video_path.stem}.vtuber-subtitle"
-    work.mkdir(parents=True, exist_ok=True)
+    # Check if input is a YouTube URL
+    is_youtube = is_youtube_url(video)
+    if is_youtube:
+        log("Detected YouTube URL, extracting audio...")
+        # Create a temporary directory for YouTube downloads
+        temp_dir = Path(work_dir) if work_dir else Path("youtube_downloads")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        # Extract audio from YouTube
+        audio_path = extract_audio_from_youtube(video, temp_dir, log=log)
+        video_path = audio_path
+        # Use audio filename for work directory name
+        work = Path(work_dir) if work_dir else audio_path.parent / f".{audio_path.stem}.vtuber-subtitle"
+        work.mkdir(parents=True, exist_ok=True)
+        # Auto-generate output path if not provided
+        if not output:
+            output = str(audio_path.with_suffix(".ass"))
+    else:
+        # Local file path
+        video_path = Path(video).resolve()
+        if not video_path.is_file():
+            raise FileNotFoundError(f"Video not found: {video_path}")
+        work = Path(work_dir) if work_dir else video_path.parent / f".{video_path.stem}.vtuber-subtitle"
+        work.mkdir(parents=True, exist_ok=True)
+        # Auto-generate output path if not provided
+        if not output:
+            output = str(video_path.with_suffix(".ass"))
     start = parse_time(start_time) or 0.0
     end = parse_time(end_time)
     if end is not None and end <= start:

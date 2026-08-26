@@ -69,17 +69,17 @@
     <h2>任务设置</h2>
 
     <div class="field">
-      <label>视频 / 音频文件路径</label>
+      <label>视频 / 音频文件路径 或 YouTube 链接</label>
       <div class="input-row">
-        <input type="text" id="video" placeholder="例如 D:\视频\xxx.mp4" oninput="autoOutput()">
+        <input type="text" id="video" placeholder="本地文件路径 或 https://www.youtube.com/watch?v=..." oninput="autoOutput()">
         <button class="browse" onclick="pickFile('video')">浏览…</button>
       </div>
-      <div class="hint">可直接输入完整路径，或用“浏览”从本机选择。</div>
+      <div class="hint">支持本地视频文件路径，或 YouTube 视频链接（自动提取音频生成字幕）。</div>
     </div>
 
     <div class="field">
       <label>输出 ASS 路径</label>
-      <input type="text" id="output" placeholder="留空则与视频同名 .ass">
+      <input type="text" id="output" placeholder="留空则自动生成输出路径">
     </div>
 
     <div class="row">
@@ -201,6 +201,11 @@ let pickerPath = "";
 function autoOutput() {
   const v = $("video").value.trim();
   if (v && !$("output").value.trim()) {
+    // Check if it's a YouTube URL
+    if (v.match(/^https?:\/\/(www\.)?youtube\.com|youtu\.be\//i)) {
+      // Don't auto-set output for YouTube URLs; let the pipeline decide
+      return;
+    }
     $("output").value = v.replace(/\.[^.]+$/, "") + ".ass";
   }
 }

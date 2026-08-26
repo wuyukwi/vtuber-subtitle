@@ -7,3 +7,4 @@ __pycache__/
 *.ass
 .*.vtuber-subtitle/
 uploads/
+youtube_downloads/
