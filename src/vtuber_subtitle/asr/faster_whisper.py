@@ -20,15 +20,15 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
     if compute_type == "auto":
         compute_type = "float16" if device == "cuda" else "int8"
     model = WhisperModel(model_name, device=device, compute_type=compute_type)
-    vad_parameters = {"min_silence_duration_ms": 300, "speech_pad_ms": 400,
-                      "min_speech_duration_ms": 80} if vad_filter else None
+    vad_parameters = {"min_silence_duration_ms": 1000, "speech_pad_ms": 400,
+                      "min_speech_duration_ms": 250} if vad_filter else None
     chunks, _ = model.transcribe(
         str(audio), language="ja", beam_size=beam_size, best_of=5,
-        temperature=0.0, compression_ratio_threshold=2.4,
+        compression_ratio_threshold=2.4,
         log_prob_threshold=-1.0, no_speech_threshold=0.6,
         vad_filter=vad_filter, vad_parameters=vad_parameters,
         hallucination_silence_threshold=2.0,
-        condition_on_previous_text=False, word_timestamps=True,
+        condition_on_previous_text=True, word_timestamps=True,
         chunk_length=30)
     raw = _split_by_words(list(chunks), max_segment_seconds, pause_threshold)
     raw = _merge_short_fragments(raw)
