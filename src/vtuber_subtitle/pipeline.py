@@ -75,8 +75,10 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
         subtitle_mode: str = "bilingual", vad_filter: bool = True,
         start_time: str | float | None = None, end_time: str | float | None = None,
         template: str | None = None, japanese_style: str = "Japanese",
-        chinese_style: str = "Chinese", max_segment_seconds: float = 15.0,
-        pause_threshold: float = 0.8, window_minutes: int = 15, window_overlap: float = 3.0,
+        chinese_style: str = "Chinese", max_segment_seconds: float = 10.0,
+        pause_threshold: float = 0.6, window_minutes: int = 15, window_overlap: float = 3.0,
+        beam_size: int = 10, merge_target_mean: float = 3.6, merge_max_gap: float = 1.0,
+        merge_hard_max: float = 10.0,
         log: Callable[[str], None] = print) -> Path:
     # Check if input is a YouTube URL
     is_youtube = is_youtube_url(video)
@@ -109,14 +111,25 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
     if end is not None and end <= start:
         raise ValueError("end_time must be greater than start_time")
 
-    if subtitle_mode not in ("bilingual", "japanese"):
-        raise ValueError("subtitle_mode must be bilingual or japanese")
+    if subtitle_mode not in ("bilingual", "japanese", "chinese"):
+        raise ValueError("subtitle_mode must be bilingual, japanese or chinese")
 
     if end is None:
         log("Reading video duration...")
         end = get_duration(video_path)
 
     windows = _build_windows(start, end, window_minutes)
+
+    # 通用：从术语表构建 initial_prompt，提升固有名词召回（非硬编码）
+    initial_prompt = None
+    if glossary:
+        try:
+            _entries_for_prompt = load_glossary(glossary)
+            if _entries_for_prompt:
+                # 取前 30 条，避免 prompt 过长
+                initial_prompt = " ".join(e["source"] for e in _entries_for_prompt[:30])
+        except Exception:
+            pass
 
     segments: list[Segment] = []
     for i, (w_start, w_end) in enumerate(windows):
@@ -127,6 +140,11 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
         asr_json = work / f"segments_{tag}_v17.json"
         if asr_json.exists():
             segs = _read_segments(asr_json)
+            try:
+                from .asr.correction import correct_segments
+                segs = correct_segments(segs)
+            except Exception:
+                pass
             log(f"Using cached transcription: {asr_json}")
         else:
             if audio.exists():
@@ -137,7 +155,18 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
             log(f"Transcribing {_format_time(extract_start)}s-{_format_time(extract_end)}s ({asr_model})...")
             segs = transcribe(audio, asr_model, device, compute_type, vad_filter=vad_filter,
                               max_segment_seconds=max_segment_seconds,
-                              pause_threshold=pause_threshold)
+                              pause_threshold=pause_threshold,
+                              initial_prompt=initial_prompt,
+                              beam_size=beam_size,
+                              merge_target_mean=merge_target_mean,
+                              merge_max_gap=merge_max_gap,
+                              merge_hard_max=merge_hard_max)
+            # 应用日文固有名词校正（基于 glossary 的 ASR 纠错）
+            try:
+                from .asr.correction import correct_segments
+                segs = correct_segments(segs)
+            except Exception:
+                pass
             if extract_start:
                 segs = [Segment(s.id, s.start + extract_start, s.end + extract_start,
                                 s.japanese, s.chinese) for s in segs]
@@ -150,7 +179,9 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
     _write_segments(asr_json, segments)
 
     translated_json = work / "translated_v17.json"
-    if skip_translation or subtitle_mode == "japanese":
+    if skip_translation:
+        translated = segments
+    elif subtitle_mode == "japanese":
         translated = segments
     elif translated_json.exists():
         translated = _read_segments(translated_json)
@@ -164,6 +195,9 @@ def run(video: str, output: str | None, *, glossary: str | None = None, provider
             log(f"Translating {batch_start + 1}-{batch_start + len(batch)} / {len(segments)}...")
             translated.extend(client.translate(batch, entries))
         _write_segments(translated_json, translated)
+    # 中文单语：只保留中文，清空日文，避免 write_ass 输出日文行
+    if subtitle_mode == "chinese":
+        translated = [Segment(s.id, s.start, s.end, "", s.chinese) for s in translated]
     result = write_ass(translated, output, template=template,
                        japanese_style=japanese_style, chinese_style=chinese_style)
     log(f"Wrote: {result}")

@@ -4,9 +4,79 @@ from ..models import Segment
 _RESPONSE_WORDS = {"はい", "ええ", "うん", "あの", "えっと", "そう", "じゃ", "じゃあ"}
 
 
+# Sentence-final forms: a boundary right after one of these is treated as a hard
+# sentence break and is NOT merged away by the readability merge below.
+_SENTENCE_ENDINGS = ("です", "ます", "た", "だ", "よ", "ね", "か", "わ", "ぞ", "ぜ", "な", "っ",
+                     "よう", "まい", "でしょう", "ください", "ございます", "ました", "でした")
+
+
+def _is_sentence_end(text: str) -> bool:
+    text = text.strip()
+    if text.endswith(("。", "？", "！", ".", "?", "!")):
+        return True
+    return any(text.endswith(suf) for suf in _SENTENCE_ENDINGS)
+
+
+def merge_to_target(raw: list[Segment], target_mean: float = 3.6, max_gap: float = 1.0,
+                    hard_max: float = 10.0) -> list[Segment]:
+    """Readability merge: pull the average subtitle duration toward ``target_mean`` by
+    iteratively folding the shortest segment into the closer neighbour. Never merges
+    across a sentence boundary (detected by ``_is_sentence_end``), never creates a
+    line longer than ``hard_max``, and only joins segments whose inter-gap is <= ``max_gap``.
+
+    This is adaptive: segments that are already longer than ``target_mean`` on average
+    (e.g. a calm stretch) are left untouched, while over-segmented stretches are grouped
+    into readable lines — mimicking how human subtitles group short clauses."""
+    if not raw or target_mean <= 0:
+        return raw
+    segs = [Segment(s.id, s.start, s.end, s.japanese, s.chinese) for s in raw]
+    while True:
+        if not segs:
+            break
+        cur_mean = sum(s.end - s.start for s in segs) / len(segs)
+        if cur_mean >= target_mean:
+            break
+        best_i, best_dur = -1, float("inf")
+        for i, s in enumerate(segs):
+            dur = s.end - s.start
+            if dur >= best_dur:
+                continue
+            can_prev = (i > 0 and (s.start - segs[i - 1].end) <= max_gap and
+                        (s.end - segs[i - 1].start) <= hard_max and
+                        not _is_sentence_end(segs[i - 1].japanese) and
+                        not _is_sentence_end(s.japanese))
+            can_next = (i + 1 < len(segs) and (segs[i + 1].start - s.end) <= max_gap and
+                        (segs[i + 1].end - s.start) <= hard_max and
+                        not _is_sentence_end(s.japanese) and
+                        not _is_sentence_end(segs[i + 1].japanese))
+            if can_prev or can_next:
+                best_i, best_dur = i, dur
+        if best_i < 0:
+            break
+        i = best_i
+        s = segs[i]
+        gp = (s.start - segs[i - 1].end) if i > 0 else float("inf")
+        gn = (segs[i + 1].start - s.end) if i + 1 < len(segs) else float("inf")
+        can_prev = (i > 0 and gp <= max_gap and (s.end - segs[i - 1].start) <= hard_max and
+                    not _is_sentence_end(segs[i - 1].japanese) and not _is_sentence_end(s.japanese))
+        can_next = (i + 1 < len(segs) and gn <= max_gap and (segs[i + 1].end - s.start) <= hard_max and
+                    not _is_sentence_end(s.japanese) and not _is_sentence_end(segs[i + 1].japanese))
+        if can_prev and (not can_next or gp <= gn):
+            prev = segs.pop(i - 1)
+            segs[i - 1] = Segment(prev.id, prev.start, s.end, prev.japanese + s.japanese, prev.chinese)
+        elif can_next:
+            nxt = segs.pop(i + 1)
+            segs[i] = Segment(s.id, s.start, nxt.end, s.japanese + nxt.japanese, s.chinese)
+        else:
+            break
+    return [Segment(i, s.start, s.end, s.japanese, s.chinese) for i, s in enumerate(segs)]
+
+
 def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "auto",
-               compute_type: str = "auto", beam_size: int = 5, vad_filter: bool = True,
-               max_segment_seconds: float = 15.0, pause_threshold: float = 0.8) -> list[Segment]:
+               compute_type: str = "auto", beam_size: int = 10, vad_filter: bool = True,
+               max_segment_seconds: float = 10.0, pause_threshold: float = 0.6,
+               initial_prompt: str | None = None, merge_target_mean: float = 3.6,
+               merge_max_gap: float = 1.0, merge_hard_max: float = 10.0) -> list[Segment]:
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
@@ -29,11 +99,14 @@ def transcribe(audio: str | Path, model_name: str = "large-v3", device: str = "a
         vad_filter=vad_filter, vad_parameters=vad_parameters,
         hallucination_silence_threshold=2.0,
         condition_on_previous_text=True, word_timestamps=True,
-        chunk_length=30)
+        chunk_length=30, initial_prompt=initial_prompt)
     raw = _split_by_words(list(chunks), max_segment_seconds, pause_threshold)
     raw = _merge_short_fragments(raw)
     raw = _merge_isolated_fragments(raw)
-    return _remove_repeated_hallucinations(raw)
+    raw = _remove_repeated_hallucinations(raw)
+    if merge_target_mean and merge_target_mean > 0:
+        raw = merge_to_target(raw, merge_target_mean, merge_max_gap, merge_hard_max)
+    return raw
 
 
 def _split_by_words(chunks: list, max_segment_seconds: float,
@@ -54,9 +127,11 @@ def _split_by_words(chunks: list, max_segment_seconds: float,
             gap = round(float(word.start) - float(previous.end), 3)
             duration = round(float(previous.end) - float(group[0].start), 3)
             punctuation_break = previous.word.strip().endswith(("。", "？", "！", ".", "?", "!"))
+            # 句长超限时放宽切分条件，避免超长句
+            max_exceeded = duration >= max_segment_seconds
             if (punctuation_break or
                     (gap >= pause_threshold and _safe_pause_boundary(group, word)) or
-                    (duration >= max_segment_seconds and _safe_pause_boundary(group, word))):
+                    (max_exceeded and _safe_max_boundary(group, word))):
                 _append_word_group(result, group)
                 group = []
             group.append(word)
@@ -64,12 +139,30 @@ def _split_by_words(chunks: list, max_segment_seconds: float,
     return result
 
 
-def _safe_pause_boundary(group: list, next_word) -> bool:
-    """Avoid breaking inside a one-character BPE token such as ゲ or 一."""
+def _safe_max_boundary(group: list, next_word) -> bool:
+    """max 超限时的宽松切分：仅避免单字 BPE 词中切断，其余均可"""
     previous_text = group[-1].word.strip()
-    if len(previous_text) >= 2:
+    if len(previous_text) == 1:
+        return False
+    return True
+
+
+def _safe_pause_boundary(group: list, next_word) -> bool:
+    """仅在句末附近允许停顿切分，避免句中/词中切断"""
+    previous_text = group[-1].word.strip()
+    # 句末标点已在外层判断，这里只处理无标点的停顿
+    # 允许的句末形态：です/ます/た/だ/よ/ね/か/わ/ぞ/な/っ 等，或长度>=4的完整词
+    sentence_endings = ("です", "ます", "た", "だ", "よ", "ね", "か", "わ", "ぞ", "ぜ", "な", "っ", "よう", "まい", "でしょう", "ください", "ございます", "ました", "でした")
+    if any(previous_text.endswith(suf) for suf in sentence_endings):
         return True
-    if previous_text in {"は", "が", "を", "に", "へ", "で", "と", "も", "の", "から", "まで"}:
+    # 助词 は/が/を/に/へ/で/と/も/の 单独时禁止切（句中）
+    if previous_text in {"は", "が", "を", "に", "へ", "で", "と", "も", "の", "から", "まで", "や", "か", "ね", "よ"}:
+        return False
+    # 单字 BPE 如 ゲ/一 禁止
+    if len(previous_text) == 1:
+        return False
+    # 2-3字词需看整体：仅当组内已含动词/形容词结尾才允许，否则视为句中
+    if len(previous_text) >= 4:
         return True
     return False
 

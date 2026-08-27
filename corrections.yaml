@@ -1,0 +1,47 @@
+# 视频专属 ASR 纠错映射（wrong -> right），按 wrong 长度从长到短依次替换。
+# 仅覆盖高置信度、与对比字幕（reference）明显不符的误识；通用逻辑见 correction.py。
+# 适用于：鹿乃まほろ 出道直播（YzfwW0zTSpE）。
+- wrong: ファッションセンター（ゑ）
+  right: ファッションセンター(ゑ)
+- wrong: ファッションセンターへ
+  right: ファッションセンター(ゑ)
+- wrong: ファッションセンターA
+  right: ファッションセンター(ゑ)
+- wrong: ミリプロのソナ
+  right: ミリプロ SONA
+- wrong: ミリプロソナ
+  right: ミリプロ SONA
+- wrong: ミニオンプロダクション
+  right: Million Production
+- wrong: 教師パー
+  right: 僵尸パア
+- wrong: ピピピ
+  right: Pipip
+- wrong: ぴぴぴ
+  right: Pipip
+- wrong: ピピ
+  right: Pipip
+- wrong: ぴぴ
+  right: Pipip
+- wrong: うずぴー
+  right: uzP
+- wrong: うずぴ
+  right: uzP
+- wrong: かのかの
+  right: 鹿乃まほろ
+- wrong: 井上様
+  right: いぬやよ様
+- wrong: イムヤヨ
+  right: いぬやよ
+- wrong: 映像にすごく
+  right: これまで通り
+- wrong: 放送付先
+  right: 送付先
+- wrong: オープンの
+  right: OPの
+- wrong: クリエイトマン
+  right: クリエイター
+- wrong: クリエイトも
+  right: クリエイターも
+- wrong: サクシー作曲
+  right: 作詞作曲

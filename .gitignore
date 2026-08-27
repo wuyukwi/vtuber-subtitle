@@ -8,3 +8,4 @@ __pycache__/
 .*.vtuber-subtitle/
 uploads/
 youtube_downloads/
+.bench/

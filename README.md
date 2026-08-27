@@ -306,6 +306,9 @@ vtuber-subtitle input.mp4 -o output.ass --glossary glossary.yaml
 | `--no-vad` | 关闭静音检测；可能在静音尾部产生重复幻觉字幕 | 关闭 |
 | `--max-segment-seconds` | 单条字幕最大时长，超出后按词级时间拆分 | `15` |
 | `--pause-threshold` | 词间停顿达到此秒数时断句 | `0.8` |
+| `--merge-target-mean` | 可读性合并目标平均时长（秒）：把过短的相邻字幕按语义合并到接近该值；`0` 关闭 | `3.6` |
+| `--merge-max-gap` | 合并时允许的相邻字幕最大间隔（秒） | `1.0` |
+| `--merge-hard-max` | 合并后单条字幕的最大时长（秒） | `10.0` |
 | `--start-time` | 原视频起始时间 | 无 |
 | `--end-time` | 原视频结束时间 | 无 |
 | `--ass-template` | ASS 样式模板路径 | 无 |

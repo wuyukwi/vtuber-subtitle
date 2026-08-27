@@ -51,7 +51,8 @@ def write_ass(segments: list[Segment], output: str | Path, config: dict | None =
     for s in segments:
         if not s.japanese and not s.chinese:
             continue
-        lines.append(f"Dialogue: 0,{ass_time(s.start)},{ass_time(s.end)},{japanese_style},,0,0,0,,{_escape(s.japanese)}")
+        if s.japanese:
+            lines.append(f"Dialogue: 0,{ass_time(s.start)},{ass_time(s.end)},{japanese_style},,0,0,0,,{_escape(s.japanese)}")
         if s.chinese:
             lines.append(f"Dialogue: 0,{ass_time(s.start)},{ass_time(s.end)},{chinese_style},,0,0,0,,{_escape(s.chinese)}")
     path = Path(output)
